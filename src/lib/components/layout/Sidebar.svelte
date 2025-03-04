@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
+	import { config } from '$lib/stores';
 
 	import { goto } from '$app/navigation';
 	import {
@@ -23,6 +24,17 @@
 		isApp
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
+
+	let logoPath = `${WEBUI_BASE_URL}/static/favicon.png`;
+
+// Add this to set the logo path whenever config changes
+$: {
+  if ($config?.CUSTOM_LOGO_PATH) {
+    logoPath = $config.CUSTOM_LOGO_PATH;
+  } else {
+    logoPath = `${WEBUI_BASE_URL}/static/favicon.png`;
+  }
+}
 
 	const i18n = getContext('i18n');
 
@@ -521,8 +533,8 @@
 					<div class="self-center mx-1.5">
 						<img
 							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" size-5 -translate-x-1.5 rounded-full"
+							src={logoPath}
+							class="size-5 -translate-x-1.5 rounded-full"
 							alt="logo"
 						/>
 					</div>
@@ -535,7 +547,6 @@
 					<PencilSquare className=" size-5" strokeWidth="2" />
 				</div>
 			</a>
-		</div>
 
 		<!-- {#if $user?.role === 'admin'}
 			<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
