@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
+	import LogoSettings from './Interface/LogoSettings.svelte';
 
 	import { getBackendConfig, getTaskConfig, updateTaskConfig } from '$lib/apis';
 	import { setDefaultPromptSuggestions } from '$lib/apis/configs';
@@ -282,6 +283,8 @@
 				<div class=" mb-2.5 text-base font-medium">{$i18n.t('UI')}</div>
 
 				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+
+				<LogoSettings />
 
 				<div class="  {banners.length > 0 ? ' mb-3' : ''}">
 					<div class="mb-2.5 flex w-full justify-between">
