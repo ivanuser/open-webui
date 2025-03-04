@@ -1,6 +1,10 @@
+import os
+import shutil
+import uuid
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+from fastapi import UploadFile, File, HTTPException
 from typing import Optional
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -8,8 +12,12 @@ from open_webui.config import get_config, save_config
 from open_webui.config import BannerModel
 
 
+
+
 router = APIRouter()
 
+LOGO_UPLOAD_DIR = "static/uploads/logos"
+os.makedirs(LOGO_UPLOAD_DIR, exist_ok=True)
 
 ############################
 # ImportConfig
@@ -244,3 +252,76 @@ async def get_banners(
     user=Depends(get_verified_user),
 ):
     return request.app.state.config.BANNERS
+
+
+############################
+# Logo Configuration
+############################
+
+class LogoConfigForm(BaseModel):
+    CUSTOM_LOGO_PATH: Optional[str] = None
+
+
+@router.get("/logo", response_model=LogoConfigForm)
+async def get_logo_config(request: Request, user=Depends(get_verified_user)):
+    """Get the current logo path"""
+    return {
+        "CUSTOM_LOGO_PATH": request.app.state.config.CUSTOM_LOGO_PATH or request.app.state.config.DEFAULT_LOGO_PATH
+    }
+
+
+@router.post("/logo", response_model=LogoConfigForm)
+async def upload_logo(
+        request: Request,
+        file: UploadFile = File(...),
+        user=Depends(get_admin_user)
+):
+    """Upload a custom logo (admin only)"""
+
+    # Validate file is an image
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an image (jpeg, png, svg, etc.)"
+        )
+
+    # Create directory if it doesn't exist
+    os.makedirs(LOGO_UPLOAD_DIR, exist_ok=True)
+
+    # Save file with unique name
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(LOGO_UPLOAD_DIR, unique_filename)
+
+    # Save the file
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Update logo path in configuration
+    relative_path = f"/static/uploads/logos/{unique_filename}"
+    request.app.state.config.CUSTOM_LOGO_PATH = relative_path
+
+    # Save the updated configuration
+    save_config(request.app.state.config.dict())
+
+    return {
+        "CUSTOM_LOGO_PATH": request.app.state.config.CUSTOM_LOGO_PATH
+    }
+
+
+@router.delete("/logo", response_model=LogoConfigForm)
+async def reset_logo(
+        request: Request,
+        user=Depends(get_admin_user)
+):
+    """Reset to the default logo (admin only)"""
+
+    # Reset logo path in configuration
+    request.app.state.config.CUSTOM_LOGO_PATH = None
+
+    # Save the updated configuration
+    save_config(request.app.state.config.dict())
+
+    return {
+        "CUSTOM_LOGO_PATH": request.app.state.config.DEFAULT_LOGO_PATH
+    }
