@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
-	import { config } from '$lib/stores';
 
 	import { goto } from '$app/navigation';
 	import {
