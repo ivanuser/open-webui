@@ -73,6 +73,13 @@
 						>
 
 						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/mcp')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/admin/mcp">{$i18n.t('MCP')}</a
+						>
+
+						<a
 							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/settings')
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
