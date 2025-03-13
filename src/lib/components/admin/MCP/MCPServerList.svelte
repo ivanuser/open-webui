@@ -25,10 +25,18 @@
 	
 	// Handle connect/disconnect
 	const toggleConnection = async (server) => {
+		// Skip if already in a transitional state
+		if (server.status === 'connecting' || server.status === 'disconnecting') {
+			return;
+		}
+		
 		try {
 			if (server.status === 'connected') {
 				// Disconnect logic
-				server.status = 'disconnecting';
+				mcpServers.update(servers => 
+					servers?.map(s => s.id === server.id ? { ...s, status: 'disconnecting' } : s) || []
+				);
+				
 				const result = await disconnectFromMCPServer(localStorage.token, server.id);
 				if (result.success) {
 					mcpServers.update(servers => 
@@ -40,7 +48,6 @@
 				}
 			} else {
 				// Connect logic
-				server.status = 'connecting';
 				mcpServers.update(servers => 
 					servers?.map(s => s.id === server.id ? { ...s, status: 'connecting' } : s) || []
 				);
@@ -161,13 +168,16 @@
 					</button>
 				</Tooltip>
 				
-				<div class="self-center mx-1">
+				<div class="self-center mx-1 {(server.status === 'connecting' || server.status === 'disconnecting') ? 'opacity-50 cursor-not-allowed' : ''}">
 					<Tooltip content={server.status === 'connected' ? $i18n.t('Connected') : $i18n.t('Disconnected')}>
-						<Switch
-							state={server.status === 'connected'}
-							on:change={() => toggleConnection(server)}
-							disabled={server.status === 'connecting' || server.status === 'disconnecting'}
-						/>
+						<div on:click={() => toggleConnection(server)}>
+							<Switch
+								state={server.status === 'connected'}
+								on:change={() => {
+									// The actual toggle logic is handled by the onClick of the parent div
+								}}
+							/>
+						</div>
 					</Tooltip>
 				</div>
 			</div>

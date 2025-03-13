@@ -50,9 +50,19 @@
 	$: selectedServer = filteredItems.find(item => item.value === value);
 
 	const toggleConnection = async (serverId, currentStatus) => {
+		// Skip if already in a transitional state
+		const server = $mcpServers.find(s => s.id === serverId);
+		if (!server || server.status === 'connecting' || server.status === 'disconnecting') {
+			return;
+		}
+		
 		try {
 			if (currentStatus === 'connected') {
 				// Disconnect logic
+				mcpServers.update(servers => 
+					servers?.map(s => s.id === serverId ? { ...s, status: 'disconnecting' } : s) || []
+				);
+				
 				const result = await disconnectFromMCPServer(localStorage.token, serverId);
 				if (result.success) {
 					mcpServers.update(servers => 
@@ -229,12 +239,15 @@
 								</div>
 							{/if}
 
-							<div class="ml-auto">
-								<Switch 
-									state={item.server.status === 'connected'} 
-									on:change={() => toggleConnection(item.server.id, item.server.status)}
-									disabled={item.server.status === 'connecting' || item.server.status === 'disconnecting'} 
-								/>
+							<div class="ml-auto {(item.server.status === 'connecting' || item.server.status === 'disconnecting') ? 'opacity-50 cursor-not-allowed' : ''}">
+								<div on:click|stopPropagation={() => toggleConnection(item.server.id, item.server.status)}>
+									<Switch 
+										state={item.server.status === 'connected'} 
+										on:change={() => {
+											// The actual toggle logic is handled by the onClick of the parent div
+										}}
+									/>
+								</div>
 							</div>
 						</div>
 					{/each}
