@@ -5,6 +5,7 @@
 	import MCPServerList from './MCP/MCPServerList.svelte';
 	import MCPConnectionStatus from './MCP/MCPConnectionStatus.svelte';
 	import MCPServerModal from './MCP/MCPServerModal.svelte';
+	import MCPDashboard from './MCP/MCPDashboard.svelte';
 	import Plus from '../icons/Plus.svelte';
 	import Search from '../icons/Search.svelte';
 	import { getMCPServers } from '$lib/apis/mcp';
@@ -15,6 +16,7 @@
 	let showAddModal = false;
 	let selectedServer = null;
 	let isEditing = false;
+	let showDashboard = true; // Show dashboard by default
 	
 	// Initialize mcpServers if not already initialized
 	if (!$mcpServers) {
@@ -86,6 +88,21 @@
 			<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 			<span class="text-base font-lg text-gray-500 dark:text-gray-300">{filteredServers.length}</span>
 		</div>
+		
+		<div class="flex items-center gap-2">
+			<button 
+				class="px-2 py-1 text-sm rounded-lg {showDashboard ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}"
+				on:click={() => showDashboard = true}
+			>
+				{$i18n.t('Dashboard')}
+			</button>
+			<button
+				class="px-2 py-1 text-sm rounded-lg {!showDashboard ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}"
+				on:click={() => showDashboard = false}
+			>
+				{$i18n.t('Servers')}
+			</button>
+		</div>
 	</div>
 
 	<div class="flex w-full space-x-2">
@@ -112,11 +129,15 @@
 </div>
 
 <div class="mb-5">
-	<MCPConnectionStatus />
-	<MCPServerList 
-		servers={filteredServers} 
-		on:edit={event => handleEditServer(event.detail)}
-	/>
+	{#if showDashboard}
+		<MCPDashboard servers={filteredServers} />
+	{:else}
+		<MCPConnectionStatus />
+		<MCPServerList 
+			servers={filteredServers} 
+			on:edit={event => handleEditServer(event.detail)}
+		/>
+	{/if}
 </div>
 
 <div class="flex justify-end w-full mb-2">

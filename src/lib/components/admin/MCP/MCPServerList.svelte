@@ -9,6 +9,7 @@
 	import Gear from '../../icons/Gear.svelte';
 	import { connectToMCPServer, disconnectFromMCPServer, deleteMCPServer } from '$lib/apis/mcp';
 	import { mcpServers } from '$lib/stores';
+	import MCPServerLogs from './MCPServerLogs.svelte';
 	
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -17,6 +18,8 @@
 	
 	let showDeleteConfirm = false;
 	let serverToDelete = null;
+	let showLogs = false;
+	let selectedServerForLogs = null;
 	
 	// Initialize mcpServers if not already initialized
 	if (!$mcpServers) {
@@ -100,6 +103,29 @@
 		serverToDelete = server;
 		showDeleteConfirm = true;
 	};
+	
+	const viewLogs = (server) => {
+		selectedServerForLogs = server.id;
+		showLogs = true;
+	};
+	
+	const checkStatus = async (server) => {
+		try {
+			toast.info($i18n.t('Checking server status...'));
+			
+			// Mock status check for now
+			setTimeout(() => {
+				if (server.status === 'connected') {
+					toast.success($i18n.t('Server is running properly'));
+				} else {
+					toast.error($i18n.t('Server is not running or has issues'));
+				}
+			}, 1000);
+		} catch (error) {
+			console.error('Error checking server status:', error);
+			toast.error($i18n.t('Error checking server status'));
+		}
+	};
 </script>
 
 {#if servers.length === 0}
@@ -148,6 +174,30 @@
 			</div>
 			
 			<div class="flex flex-row gap-0.5 self-center">
+				<Tooltip content={$i18n.t('View Logs')}>
+					<button
+						class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+						type="button"
+						on:click={() => viewLogs(server)}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h9.75m4.5-4.5v12m0 0-3.75-3.75M17.25 21 21 17.25" />
+						</svg>
+					</button>
+				</Tooltip>
+				
+				<Tooltip content={$i18n.t('Check Status')}>
+					<button
+						class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+						type="button"
+						on:click={() => checkStatus(server)}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+						</svg>
+					</button>
+				</Tooltip>
+				
 				<Tooltip content={$i18n.t('Edit')}>
 					<button
 						class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
@@ -201,3 +251,8 @@
 		{/if}
 	</div>
 </DeleteConfirmDialog>
+
+<MCPServerLogs 
+	bind:show={showLogs}
+	serverId={selectedServerForLogs}
+/>
