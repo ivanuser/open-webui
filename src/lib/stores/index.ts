@@ -57,6 +57,7 @@ export const prompts: Writable<null | Prompt[]> = writable(null);
 export const knowledge: Writable<null | Document[]> = writable(null);
 export const tools = writable(null);
 export const functions = writable(null);
+export const mcpServers: Writable<null | MCPServer[]> = writable(null);
 
 export const banners: Writable<Banner[]> = writable([]);
 
@@ -120,6 +121,20 @@ export interface OllamaModel extends BaseModel {
 	};
 }
 
+export interface MCPServer {
+	id: string;
+	name: string;
+	type: string;
+	url?: string;
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+	status: 'connected' | 'disconnected' | 'connecting' | 'error';
+	lastConnected?: string;
+	description?: string;
+	config?: any;
+}
+
 type OllamaModelDetails = {
 	parent_model: string;
 	format: string;
@@ -141,6 +156,7 @@ type Settings = {
 	splitLargeDeltas?: boolean;
 	chatDirection: 'LTR' | 'RTL';
 	ctrlEnterToSend?: boolean;
+	enabledMcpServers?: string[];
 
 	system?: string;
 	requestFormat?: string;

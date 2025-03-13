@@ -1,36 +1,71 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { WEBUI_NAME } from '$lib/stores';
+	import { WEBUI_NAME, mcpServers } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import MCPServerList from './MCP/MCPServerList.svelte';
 	import MCPConnectionStatus from './MCP/MCPConnectionStatus.svelte';
+	import MCPServerModal from './MCP/MCPServerModal.svelte';
 	import Plus from '../icons/Plus.svelte';
 	import Search from '../icons/Search.svelte';
+	import { getMCPServers } from '$lib/apis/mcp';
 	
 	const i18n = getContext('i18n');
 	
 	let query = '';
-	let servers = []; // This will store the list of MCP servers
+	let showAddModal = false;
+	let selectedServer = null;
+	let isEditing = false;
 	
 	// Filter servers based on search query
-	$: filteredServers = servers.filter(
-		(server) => query === '' || 
-		server.name.toLowerCase().includes(query.toLowerCase()) ||
-		server.url.toLowerCase().includes(query.toLowerCase())
-	);
+	$: filteredServers = $mcpServers?.filter(
+		(server) => 
+			query === '' || 
+			server.name.toLowerCase().includes(query.toLowerCase()) ||
+			server.type.toLowerCase().includes(query.toLowerCase()) ||
+			(server.description && server.description.toLowerCase().includes(query.toLowerCase()))
+	) || [];
 	
 	onMount(async () => {
-		// Initialize with sample data for now
-		// Later this will be replaced with actual API calls
-		servers = [
-			{
-				id: 'server1',
-				name: 'MCP Server 1',
-				url: 'https://mcp-server-1.example.com',
-				status: 'disconnected'
-			}
-		];
+		try {
+			// Fetch MCP servers
+			const servers = await getMCPServers(localStorage.token);
+			mcpServers.set(servers);
+		} catch (error) {
+			console.error('Error fetching MCP servers:', error);
+			toast.error($i18n.t('Failed to fetch MCP servers'));
+			mcpServers.set([]);
+		}
 	});
+
+	const handleAddServer = () => {
+		selectedServer = null;
+		isEditing = false;
+		showAddModal = true;
+	};
+
+	const handleEditServer = (server) => {
+		selectedServer = server;
+		isEditing = true;
+		showAddModal = true;
+	};
+
+	const handleServerAdded = (event) => {
+		const newServer = event.detail;
+		mcpServers.update(servers => [...(servers || []), newServer]);
+		showAddModal = false;
+		toast.success(isEditing 
+			? $i18n.t('MCP server updated successfully') 
+			: $i18n.t('MCP server added successfully'));
+	};
+
+	const handleServerUpdated = (event) => {
+		const updatedServer = event.detail;
+		mcpServers.update(servers => 
+			servers?.map(server => server.id === updatedServer.id ? updatedServer : server) || []
+		);
+		showAddModal = false;
+		toast.success($i18n.t('MCP server updated successfully'));
+	};
 </script>
 
 <svelte:head>
@@ -63,9 +98,7 @@
 		<div>
 			<button
 				class="px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
-				on:click={() => {
-					toast.info($i18n.t('Add MCP Server feature coming soon'));
-				}}
+				on:click={handleAddServer}
 			>
 				<Plus className="size-3.5" />
 			</button>
@@ -75,18 +108,29 @@
 
 <div class="mb-5">
 	<MCPConnectionStatus />
-	<MCPServerList servers={filteredServers} />
+	<MCPServerList 
+		servers={filteredServers} 
+		on:edit={event => handleEditServer(event.detail)}
+	/>
 </div>
 
 <div class="flex justify-end w-full mb-2">
 	<div class="flex space-x-2">
 		<button
 			class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
-			on:click={() => {
-				toast.info($i18n.t('MCP Connection feature coming soon'));
-			}}
+			on:click={handleAddServer}
 		>
-			<div class="self-center mr-2 font-medium line-clamp-1">{$i18n.t('Connect to MCP Server')}</div>
+			<div class="self-center mr-2 font-medium line-clamp-1">{$i18n.t('Add MCP Server')}</div>
 		</button>
 	</div>
 </div>
+
+{#if showAddModal}
+	<MCPServerModal 
+		bind:show={showAddModal} 
+		server={selectedServer}
+		{isEditing}
+		on:add={handleServerAdded}
+		on:update={handleServerUpdated}
+	/>
+{/if}

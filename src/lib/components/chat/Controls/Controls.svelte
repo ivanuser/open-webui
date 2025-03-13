@@ -8,13 +8,19 @@
 	import Valves from '$lib/components/chat/Controls/Valves.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
+	import MCPServerSelector from '../MCPServerSelector.svelte';
 
-	import { user } from '$lib/stores';
+	import { user, mcpServers, config } from '$lib/stores';
 	export let models = [];
 	export let chatFiles = [];
 	export let params = {};
 
 	let showValves = false;
+	let showMCP = false;
+	let selectedMCPServer = '';
+	
+	$: hasMCPServers = $mcpServers && $mcpServers.length > 0;
+	$: connectedMCPServers = $mcpServers?.filter(server => server.status === 'connected') || [];
 </script>
 
 <div class=" dark:text-white">
@@ -56,6 +62,33 @@
 								}}
 							/>
 						{/each}
+					</div>
+				</Collapsible>
+
+				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+			{/if}
+
+			{#if hasMCPServers}
+				<Collapsible 
+					bind:open={showMCP} 
+					title={$i18n.t('MCP Servers')} 
+					buttonClassName="w-full"
+					badge={connectedMCPServers.length > 0 ? connectedMCPServers.length : undefined}
+				>
+					<div class="mt-2" slot="content">
+						<MCPServerSelector bind:selectedServer={selectedMCPServer} />
+						
+						{#if selectedMCPServer}
+							{#if connectedMCPServers.some(s => s.id === selectedMCPServer)}
+								<div class="text-xs text-green-600 dark:text-green-400 mt-2 px-1">
+									{$i18n.t('Using MCP server for enhanced capabilities')}
+								</div>
+							{:else}
+								<div class="text-xs text-yellow-600 dark:text-yellow-400 mt-2 px-1">
+									{$i18n.t('Connect to the MCP server to use it')}
+								</div>
+							{/if}
+						{/if}
 					</div>
 				</Collapsible>
 
