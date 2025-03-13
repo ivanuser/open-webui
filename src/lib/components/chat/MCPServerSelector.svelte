@@ -12,6 +12,11 @@
 	export let selectedServer = '';
 	export let disabled = false;
 	export let showSetDefault = true;
+	
+	// Initialize mcpServers if not already initialized
+	if (!$mcpServers) {
+		mcpServers.set([]);
+	}
 
 	const saveDefaultServer = async () => {
 		if (!selectedServer) {
@@ -20,6 +25,10 @@
 		}
 		
 		// Update the settings
+		if (!$settings) {
+			$settings = {};
+		}
+		
 		if (!$settings.enabledMcpServers) {
 			$settings.enabledMcpServers = [];
 		}
@@ -46,7 +55,7 @@
 		}
 		
 		// Set the default server from settings if available
-		if ($settings.enabledMcpServers && $settings.enabledMcpServers.length > 0 && !selectedServer) {
+		if ($settings?.enabledMcpServers && $settings.enabledMcpServers.length > 0 && !selectedServer) {
 			selectedServer = $settings.enabledMcpServers[0];
 		}
 	});

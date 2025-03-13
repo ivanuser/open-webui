@@ -18,6 +18,11 @@
 	let showDeleteConfirm = false;
 	let serverToDelete = null;
 	
+	// Initialize mcpServers if not already initialized
+	if (!$mcpServers) {
+		mcpServers.set([]);
+	}
+	
 	// Handle connect/disconnect
 	const toggleConnection = async (server) => {
 		try {
@@ -176,11 +181,13 @@
 	on:confirm={handleDelete}
 >
 	<div class="text-sm text-gray-500">
-		{$i18n.t('This will delete')} <span class="font-semibold">{serverToDelete?.name}</span>.
-		{#if serverToDelete?.status === 'connected'}
-		<div class="mt-2 text-red-500 font-medium">
-			{$i18n.t('Warning: This server is currently connected. Deleting it will disconnect it first.')}
-		</div>
+		{#if serverToDelete}
+			{$i18n.t('This will delete')} <span class="font-semibold">{serverToDelete.name}</span>.
+			{#if serverToDelete.status === 'connected'}
+			<div class="mt-2 text-red-500 font-medium">
+				{$i18n.t('Warning: This server is currently connected. Deleting it will disconnect it first.')}
+			</div>
+			{/if}
 		{/if}
 	</div>
 </DeleteConfirmDialog>

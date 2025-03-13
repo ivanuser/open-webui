@@ -1,4 +1,4 @@
-import { API_HOST } from '$lib/constants';
+import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { config, settings } from '$lib/stores';
 import { get } from 'svelte/store';
 
@@ -28,7 +28,7 @@ export async function getMCPServers(token) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers`, {
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ export async function createMCPServer(token, serverData) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -85,7 +85,7 @@ export async function updateMCPServer(token, id, serverData) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers/${id}`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers/${id}`, {
 			method: 'PUT',
 			headers: {
 				'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export async function deleteMCPServer(token, id) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers/${id}`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers/${id}`, {
 			method: 'DELETE',
 			headers: {
 				'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ export async function connectToMCPServer(token, id) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers/${id}/connect`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers/${id}/connect`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -170,7 +170,7 @@ export async function disconnectFromMCPServer(token, id) {
 
 		// Once we have a backend implementation, we can use this:
 		/*
-		const response = await fetch(`${API_HOST}/api/mcp/servers/${id}/disconnect`, {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/mcp/servers/${id}/disconnect`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

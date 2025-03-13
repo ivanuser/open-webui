@@ -4,6 +4,11 @@
 	
 	const i18n = getContext('i18n');
 	
+	// Initialize mcpServers if not already initialized
+	if (!$mcpServers) {
+		mcpServers.set([]);
+	}
+	
 	$: connectedServers = $mcpServers?.filter(server => server.status === 'connected') || [];
 	$: totalServers = $mcpServers?.length || 0;
 	$: serverStatus = connectedServers.length > 0 

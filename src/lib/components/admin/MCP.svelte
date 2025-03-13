@@ -16,6 +16,11 @@
 	let selectedServer = null;
 	let isEditing = false;
 	
+	// Initialize mcpServers if not already initialized
+	if (!$mcpServers) {
+		mcpServers.set([]);
+	}
+	
 	// Filter servers based on search query
 	$: filteredServers = $mcpServers?.filter(
 		(server) => 

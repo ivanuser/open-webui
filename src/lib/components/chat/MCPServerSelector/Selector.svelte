@@ -21,6 +21,11 @@
 	export let searchPlaceholder = $i18n.t('Search MCP Servers');
 	export let className = 'w-[32rem]';
 	export let triggerClassName = 'text-lg';
+	
+	// Initialize mcpServers if not already initialized
+	if (!$mcpServers) {
+		mcpServers.set([]);
+	}
 
 	let show = false;
 	let searchValue = '';
@@ -70,6 +75,10 @@
 					);
 					
 					// Update settings to include this server
+					if (!$settings) {
+						$settings = {};
+					}
+					
 					if (!$settings.enabledMcpServers) {
 						$settings.enabledMcpServers = [];
 					}
