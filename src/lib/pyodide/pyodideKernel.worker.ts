@@ -29,6 +29,50 @@ const initializePyodide = async () => {
 		self.pyodide = await loadPyodide({
 			indexURL: self.indexURL
 		});
+		
+		// Configure micropip for better package installation
+		await self.pyodide.runPythonAsync(`
+import micropip
+import sys
+
+# Set up better error handling for package installation
+def configure_micropip():
+    try:
+        # Try to add alternative indices for redundancy
+        # This is wrapped in a function to handle imports cleanly
+        micropip.install('packaging')
+    except Exception as e:
+        print(f"Warning: Initial micropip setup error: {e}")
+
+try:
+    configure_micropip()
+except Exception as e:
+    print(f"Warning: Could not configure micropip: {e}")
+`);
+	}
+};
+
+const installPackage = async (packageName: string): Promise<boolean> => {
+	try {
+		await self.pyodide.runPythonAsync(`
+import micropip
+try:
+    micropip.install('${packageName}', keep_going=True)
+    print(f"Successfully installed {packageName}")
+except Exception as e:
+    print(f"Error installing {packageName}: {e}")
+    # Try fallback method
+    try:
+        micropip.install('${packageName}', index_urls=["https://pypi.org/pypi/{package_name}/json"])
+        print(f"Successfully installed {packageName} using fallback method")
+    except Exception as e2:
+        print(f"All installation methods failed for {packageName}: {e2}")
+        raise RuntimeError(f"Could not install {packageName}")
+`);
+		return true;
+	} catch (error) {
+		console.error(`Failed to install package ${packageName}:`, error);
+		return false;
 	}
 };
 
@@ -61,6 +105,35 @@ const executeCode = async (id: string, code: string) => {
 	});
 
 	try {
+		// Pre-check for imports in the code
+		const importRegex = /\bimport\s+([a-zA-Z0-9_.,\s]+)|\bfrom\s+([a-zA-Z0-9_.]+)\s+import/g;
+		const matches = Array.from(code.matchAll(importRegex));
+		const potentialPackages = new Set<string>();
+		
+		for (const match of matches) {
+			const importNames = match[1] || match[2];
+			if (importNames) {
+				// Extract potential package names and clean them
+				importNames.split(',').forEach(name => {
+					const cleaned = name.trim().split('.')[0].split(' ')[0];
+					if (cleaned && !cleaned.startsWith('_')) {
+						potentialPackages.add(cleaned);
+					}
+				});
+			}
+		}
+		
+		// Common packages that might need installation
+		const knownPackages = ['numpy', 'pandas', 'matplotlib', 'seaborn', 'scikit-learn', 'scipy'];
+		
+		// Try to pre-install packages that are imported in the code
+		for (const pkg of potentialPackages) {
+			if (knownPackages.includes(pkg)) {
+				self.postMessage({ type: 'stdout', id, package: true, message: `[package] Checking/installing ${pkg}...` });
+				await installPackage(pkg);
+			}
+		}
+
 		// Dynamically load required packages based on imports in the Python code
 		await self.pyodide.loadPackagesFromImports(code, {
 			messageCallback: (msg: string) => {

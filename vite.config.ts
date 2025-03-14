@@ -3,28 +3,31 @@ import { defineConfig } from 'vite';
 
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
-// /** @type {import('vite').Plugin} */
-// const viteServerConfig = {
-// 	name: 'log-request-middleware',
-// 	configureServer(server) {
-// 		server.middlewares.use((req, res, next) => {
-// 			res.setHeader('Access-Control-Allow-Origin', '*');
-// 			res.setHeader('Access-Control-Allow-Methods', 'GET');
-// 			res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-// 			res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-// 			next();
-// 		});
-// 	}
-// };
+/** @type {import('vite').Plugin} */
+const viteServerConfig = {
+	name: 'pyodide-cors-headers',
+	configureServer(server) {
+		server.middlewares.use((req, res, next) => {
+			// Add CORS headers to allow Pyodide to fetch packages
+			res.setHeader('Access-Control-Allow-Origin', '*');
+			res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+			res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+			// Add COOP and COEP headers for SharedArrayBuffer support
+			res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+			res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+			next();
+		});
+	}
+};
 
 export default defineConfig({
 	plugins: [
 		sveltekit(),
+		viteServerConfig,
 		viteStaticCopy({
 			targets: [
 				{
 					src: 'node_modules/onnxruntime-web/dist/*.jsep.*',
-
 					dest: 'wasm'
 				}
 			]
@@ -39,5 +42,25 @@ export default defineConfig({
 	},
 	worker: {
 		format: 'es'
+	},
+	server: {
+		proxy: {
+			// Proxy PyPI requests to avoid CORS issues
+			'/pypi': {
+				target: 'https://pypi.org',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/pypi/, '')
+			},
+			'/pythonhosted': {
+				target: 'https://files.pythonhosted.org',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/pythonhosted/, '')
+			},
+			'/cdn': {
+				target: 'https://cdn.jsdelivr.net',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/cdn/, '')
+			}
+		}
 	}
 });

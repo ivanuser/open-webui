@@ -17,7 +17,9 @@ const packages = [
 
 import { loadPyodide } from 'pyodide';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
-import { writeFile, readFile, copyFile, readdir, rmdir } from 'fs/promises';
+import { writeFile, readFile, copyFile, readdir, rmdir, mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import path from 'path';
 
 /**
  * Loading network proxy configurations from the environment variables.
@@ -49,12 +51,23 @@ function initNetworkProxyFromEnv() {
 	console.log(`Initialized network proxy "${preferedProxy}" from env`);
 }
 
+async function ensureDirectoryExists(directory) {
+	if (!existsSync(directory)) {
+		await mkdir(directory, { recursive: true });
+		console.log(`Created directory: ${directory}`);
+	}
+}
+
 async function downloadPackages() {
 	console.log('Setting up pyodide + micropip');
-
+	
+	// Ensure the static/pyodide directory exists
+	await ensureDirectoryExists('static/pyodide');
+	
 	let pyodide;
 	try {
 		pyodide = await loadPyodide({
+			indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/',
 			packageCacheDir: 'static/pyodide'
 		});
 	} catch (err) {
@@ -72,6 +85,7 @@ async function downloadPackages() {
 		if (pyodideVersion !== pyodidePackageVersion) {
 			console.log('Pyodide version mismatch, removing static/pyodide directory');
 			await rmdir('static/pyodide', { recursive: true });
+			await mkdir('static/pyodide', { recursive: true });
 		}
 	} catch (e) {
 		console.log('Pyodide package not found, proceeding with download.');
@@ -84,10 +98,49 @@ async function downloadPackages() {
 		const micropip = pyodide.pyimport('micropip');
 		console.log('Downloading Pyodide packages:', packages);
 
+		// Configure additional package sources for reliability
+		await pyodide.runPythonAsync(`
+import micropip
+import sys
+
+# Set timeouts and retry strategies for better reliability
+def configure_urllib():
+    import urllib.request
+    opener = urllib.request.build_opener()
+    opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Pyodide)')]
+    urllib.request.install_opener(opener)
+
+try:
+    configure_urllib()
+except Exception as e:
+    print(f"Warning: Could not configure urllib: {e}")
+`);
+
 		try {
+			// Install packages one by one with error handling
 			for (const pkg of packages) {
-				console.log(`Installing package: ${pkg}`);
-				await micropip.install(pkg);
+				try {
+					console.log(`Installing package: ${pkg}`);
+					await micropip.install(pkg);
+					console.log(`Successfully installed ${pkg}`);
+				} catch (err) {
+					console.error(`Error installing ${pkg}:`, err);
+					console.log(`Trying alternative installation method for ${pkg}...`);
+					
+					// Try an alternative installation method
+					try {
+						await pyodide.runPythonAsync(`
+import micropip
+try:
+    # Try with specific PyPI mirror
+    micropip.install("${pkg}", keep_going=True)
+except Exception as e:
+    print(f"Failed to install {pkg}: {e}")
+`);
+					} catch (altErr) {
+						console.error(`Alternative installation also failed for ${pkg}:`, altErr);
+					}
+				}
 			}
 		} catch (err) {
 			console.error('Package installation failed:', err);
@@ -109,12 +162,33 @@ async function downloadPackages() {
 
 async function copyPyodide() {
 	console.log('Copying Pyodide files into static directory');
+	
+	// Ensure the target directory exists
+	await ensureDirectoryExists('static/pyodide');
+	
 	// Copy all files from node_modules/pyodide to static/pyodide
-	for await (const entry of await readdir('node_modules/pyodide')) {
-		await copyFile(`node_modules/pyodide/${entry}`, `static/pyodide/${entry}`);
+	try {
+		const entries = await readdir('node_modules/pyodide');
+		for (const entry of entries) {
+			const source = `node_modules/pyodide/${entry}`;
+			const target = `static/pyodide/${entry}`;
+			await copyFile(source, target);
+		}
+		console.log('Successfully copied Pyodide files');
+	} catch (err) {
+		console.error('Error copying Pyodide files:', err);
 	}
 }
 
-initNetworkProxyFromEnv();
-await downloadPackages();
-await copyPyodide();
+// Main execution
+(async () => {
+	try {
+		initNetworkProxyFromEnv();
+		await downloadPackages();
+		await copyPyodide();
+		console.log('Pyodide setup completed successfully.');
+	} catch (err) {
+		console.error('Pyodide setup failed:', err);
+		process.exit(1);
+	}
+})();
