@@ -1,6 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 /** @type {import('vite').Plugin} */
@@ -43,24 +42,13 @@ export default defineConfig({
 	worker: {
 		format: 'es'
 	},
+	optimizeDeps: {
+		exclude: ['pyodide']
+	},
 	server: {
-		proxy: {
-			// Proxy PyPI requests to avoid CORS issues
-			'/pypi': {
-				target: 'https://pypi.org',
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/pypi/, '')
-			},
-			'/pythonhosted': {
-				target: 'https://files.pythonhosted.org',
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/pythonhosted/, '')
-			},
-			'/cdn': {
-				target: 'https://cdn.jsdelivr.net',
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/cdn/, '')
-			}
+		headers: {
+			'Cross-Origin-Opener-Policy': 'same-origin',
+			'Cross-Origin-Embedder-Policy': 'require-corp'
 		}
 	}
 });

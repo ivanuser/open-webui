@@ -18,83 +18,131 @@ async function loadPyodideAndPackages(packages: string[] = []) {
 	self.stderr = null;
 	self.result = null;
 
-	self.pyodide = await loadPyodide({
-		indexURL: '/pyodide/',
-		stdout: (text) => {
-			console.log('Python output:', text);
-
-			if (self.stdout) {
-				self.stdout += `${text}\n`;
-			} else {
-				self.stdout = `${text}\n`;
+	try {
+		// First, attempt to load Pyodide
+		console.log('Loading Pyodide...');
+		self.pyodide = await loadPyodide({
+			indexURL: '/pyodide/',
+			stdout: (text) => {
+				console.log('Python output:', text);
+				if (self.stdout) {
+					self.stdout += `${text}\n`;
+				} else {
+					self.stdout = `${text}\n`;
+				}
+			},
+			stderr: (text) => {
+				console.error('Python error:', text);
+				if (self.stderr) {
+					self.stderr += `${text}\n`;
+				} else {
+					self.stderr = `${text}\n`;
+				}
 			}
-		},
-		stderr: (text) => {
-			console.log('An error occurred:', text);
+		});
+		console.log('Pyodide loaded successfully');
+
+		// Ensure we have a mount directory for file operations
+		let mountDir = '/mnt';
+		self.pyodide.FS.mkdirTree(mountDir);
+
+		// Load micropip for package management
+		console.log('Loading micropip...');
+		try {
+			await self.pyodide.loadPackage('micropip');
+			console.log('Micropip loaded successfully');
+		} catch (err) {
+			console.error('Error loading micropip:', err);
 			if (self.stderr) {
-				self.stderr += `${text}\n`;
+				self.stderr += `\nError loading micropip: ${err.toString()}\n`;
 			} else {
-				self.stderr = `${text}\n`;
+				self.stderr = `\nError loading micropip: ${err.toString()}\n`;
 			}
-		},
-		packages: ['micropip']
-	});
+			throw err;
+		}
 
-	let mountDir = '/mnt';
-	self.pyodide.FS.mkdirTree(mountDir);
-
-	const micropip = self.pyodide.pyimport('micropip');
-	
-	if (packages && packages.length > 0) {
-		// Configure micropip for better reliability
+		// Configure micropip
 		await self.pyodide.runPythonAsync(`
-import micropip
-# Set multiple index URLs for redundancy
-micropip.install(['${packages.join("', '")}'], keep_going=True)
+			import micropip
+			print("Micropip imported successfully")
+			
+			# Configure micropip to retry on failure
+			try:
+				# Setup error handling for package installation
+				import sys
+				def pip_error_handler(e):
+					print(f"Warning during package installation: {e}")
+				
+				micropip._post_install_hooks.append(pip_error_handler)
+				print("Micropip configured with error handling")
+			except Exception as e:
+				print(f"Error configuring micropip: {e}")
 		`);
+
+		// Install requested packages if any
+		if (packages && packages.length > 0) {
+			console.log('Installing packages:', packages);
+			
+			// Install packages one by one with error handling
+			for (const pkg of packages) {
+				try {
+					console.log(`Installing ${pkg}...`);
+					
+					// Try multiple installation methods
+					await self.pyodide.runPythonAsync(`
+						import micropip
+						try:
+							print(f"Attempting to install {repr("${pkg}")}")
+							await micropip.install("${pkg}")
+							print(f"Successfully installed {repr("${pkg}")}")
+						except Exception as e:
+							print(f"Error installing {repr("${pkg}")}: {e}")
+							try:
+								# Try alternative installation
+								print(f"Trying alternative installation for {repr("${pkg}")}")
+								await micropip.install("${pkg}", keep_going=True)
+								print(f"Alternative installation successful for {repr("${pkg}")}")
+							except Exception as e2:
+								print(f"Alternative installation also failed: {e2}")
+								raise Exception(f"Failed to install {repr("${pkg}")}")
+					`);
+				} catch (err) {
+					console.error(`Error installing ${pkg}:`, err);
+					// Continue with other packages even if one fails
+				}
+			}
+		}
+		
+		// Setup matplotlib if needed
+		if (packages.includes('matplotlib')) {
+			await setupMatplotlib();
+		}
+
+	} catch (err) {
+		console.error('Error in loadPyodideAndPackages:', err);
+		if (self.stderr) {
+			self.stderr += `\nError loading Pyodide or packages: ${err.toString()}\n`;
+		} else {
+			self.stderr = `\nError loading Pyodide or packages: ${err.toString()}\n`;
+		}
 	}
 }
 
-self.onmessage = async (event) => {
-	const { id, code, ...context } = event.data;
-
-	console.log(event.data);
-
-	// The worker copies the context in its own "memory" (an object mapping name to values)
-	for (const key of Object.keys(context)) {
-		self[key] = context[key];
-	}
-
-	// make sure loading is done
-	await loadPyodideAndPackages(self.packages);
-
+async function setupMatplotlib() {
 	try {
-		// First, try to import needed packages regardless of if they're explicitly in the code
-		// This ensures common packages are available without requiring explicit imports
-		const preloadCode = `
-import sys
+		// Override plt.show() to return base64 image
+		await self.pyodide.runPythonAsync(`
+import base64
+import os
+from io import BytesIO
+
+# Configure non-interactive backend for matplotlib
+os.environ["MPLBACKEND"] = "AGG"
+
 try:
-    import numpy
-except ImportError:
-    pass
-try:
-    import pandas
-except ImportError:
-    pass
-try:
-    import matplotlib
     import matplotlib.pyplot
-    # Override for matplotlib display
-    import base64
-    import os
-    from io import BytesIO
-    
-    # before importing matplotlib
-    # to avoid the wasm backend (which needs js.document', not available in worker)
-    os.environ["MPLBACKEND"] = "AGG"
     
     _old_show = matplotlib.pyplot.show
-    assert _old_show, "matplotlib.pyplot.show"
     
     def show(*, block=None):
         buf = BytesIO()
@@ -107,24 +155,71 @@ try:
         print(f"data:image/png;base64,{img_str}")
     
     matplotlib.pyplot.show = show
-except ImportError:
-    pass
+    print("Matplotlib configured for image output")
+except ImportError as e:
+    print(f"Could not configure matplotlib: {e}")
+except Exception as e:
+    print(f"Error setting up matplotlib: {e}")
+`);
+	} catch (err) {
+		console.error('Error setting up matplotlib:', err);
+	}
+}
 
-try:
-    import seaborn as sns
-except ImportError:
-    pass
-`;
+self.onmessage = async (event) => {
+	const { id, code, ...context } = event.data;
+
+	console.log('Received message:', event.data);
+
+	// The worker copies the context in its own "memory" (an object mapping name to values)
+	for (const key of Object.keys(context)) {
+		self[key] = context[key];
+	}
+
+	// Make sure loading is done
+	try {
+		await loadPyodideAndPackages(self.packages);
 		
-		await self.pyodide.runPythonAsync(preloadCode);
-
+		// Check for imports in the code
+		if (code.includes('import')) {
+			// Pre-install common packages that might be imported
+			const importMatches = code.match(/import\s+([a-zA-Z0-9_.]+)|from\s+([a-zA-Z0-9_.]+)\s+import/g);
+			
+			if (importMatches) {
+				const commonPackages = {
+					'numpy': 'numpy',
+					'pandas': 'pandas', 
+					'matplotlib': 'matplotlib',
+					'seaborn': 'seaborn',
+					'scipy': 'scipy',
+					'sklearn': 'scikit-learn'
+				};
+				
+				const packagesToInstall = [];
+				
+				for (const match of importMatches) {
+					for (const [importName, packageName] of Object.entries(commonPackages)) {
+						if (match.includes(importName) && !self.packages.includes(packageName)) {
+							packagesToInstall.push(packageName);
+						}
+					}
+				}
+				
+				if (packagesToInstall.length > 0) {
+					console.log('Installing packages needed for imports:', packagesToInstall);
+					await loadPyodideAndPackages(packagesToInstall);
+				}
+			}
+		}
+		
+		// Execute the code
 		self.result = await self.pyodide.runPythonAsync(code);
-
-		// Safely process and recursively serialize the result
+		
+		// Process the result
 		self.result = processResult(self.result);
-
 		console.log('Python result:', self.result);
 	} catch (error) {
+		console.error('Error executing Python code:', error);
 		self.stderr = error.toString();
 	}
 

@@ -26,48 +26,82 @@ const initializePyodide = async () => {
 		self.stderr = '';
 		self.cells = {};
 
-		self.pyodide = await loadPyodide({
-			indexURL: self.indexURL
-		});
-		
-		// Configure micropip for better package installation
-		await self.pyodide.runPythonAsync(`
+		try {
+			console.log('Loading Pyodide...');
+			self.pyodide = await loadPyodide({
+				indexURL: self.indexURL
+			});
+			console.log('Pyodide loaded successfully');
+			
+			// Initialize micropip
+			try {
+				console.log('Loading micropip...');
+				await self.pyodide.loadPackage('micropip');
+				console.log('Micropip loaded successfully');
+				
+				// Configure micropip for better reliability
+				await self.pyodide.runPythonAsync(`
 import micropip
 import sys
 
-# Set up better error handling for package installation
-def configure_micropip():
+# Configure error handling
+def setup_micropip():
     try:
-        # Try to add alternative indices for redundancy
-        # This is wrapped in a function to handle imports cleanly
-        micropip.install('packaging')
+        import micropip
+        print("Micropip imported successfully")
+        
+        # Setup for package installation with better error handling
+        def on_install_progress(package, msg):
+            print(f"Package {package}: {msg}")
+            
+        # Preload a few essential packages for better experience
+        packages_to_load = ['numpy', 'pandas', 'matplotlib']
+        for pkg in packages_to_load:
+            try:
+                print(f"Pre-installing {pkg}...")
+                await micropip.install(pkg, keep_going=True)
+                print(f"Successfully pre-installed {pkg}")
+            except Exception as e:
+                print(f"Warning: Could not pre-install {pkg}: {e}")
+                
     except Exception as e:
-        print(f"Warning: Initial micropip setup error: {e}")
+        print(f"Error in micropip setup: {e}")
 
-try:
-    configure_micropip()
-except Exception as e:
-    print(f"Warning: Could not configure micropip: {e}")
+# Run setup
+await setup_micropip()
 `);
+				console.log('Micropip configured');
+
+			} catch (err) {
+				console.error('Error initializing micropip:', err);
+				throw err;
+			}
+		} catch (err) {
+			console.error('Error initializing Pyodide:', err);
+			throw err;
+		}
 	}
 };
 
 const installPackage = async (packageName: string): Promise<boolean> => {
 	try {
+		console.log(`Installing package: ${packageName}`);
 		await self.pyodide.runPythonAsync(`
 import micropip
 try:
-    micropip.install('${packageName}', keep_going=True)
-    print(f"Successfully installed {packageName}")
+    print(f"Attempting to install {repr("${packageName}")}")
+    await micropip.install("${packageName}")
+    print(f"Successfully installed {repr("${packageName}")}")
 except Exception as e:
-    print(f"Error installing {packageName}: {e}")
-    # Try fallback method
+    print(f"Error installing {repr("${packageName}")}: {e}")
     try:
-        micropip.install('${packageName}', index_urls=["https://pypi.org/pypi/{package_name}/json"])
-        print(f"Successfully installed {packageName} using fallback method")
+        # Try alternative installation
+        print(f"Trying alternative installation for {repr("${packageName}")}")
+        await micropip.install("${packageName}", keep_going=True)
+        print(f"Alternative installation successful for {repr("${packageName}")}")
     except Exception as e2:
-        print(f"All installation methods failed for {packageName}: {e2}")
-        raise RuntimeError(f"Could not install {packageName}")
+        print(f"Alternative installation also failed: {e2}")
+        raise Exception(f"Failed to install {repr("${packageName}")}")
 `);
 		return true;
 	} catch (error) {
@@ -77,34 +111,34 @@ except Exception as e:
 };
 
 const executeCode = async (id: string, code: string) => {
-	if (!self.pyodide) {
-		await initializePyodide();
-	}
-
-	// Update the cell state to "running"
-	self.cells[id] = {
-		id,
-		status: 'running',
-		result: null,
-		stdout: '',
-		stderr: ''
-	};
-
-	// Redirect stdout/stderr to stream updates
-	self.pyodide.setStdout({
-		batched: (msg: string) => {
-			self.cells[id].stdout += msg;
-			self.postMessage({ type: 'stdout', id, message: msg });
-		}
-	});
-	self.pyodide.setStderr({
-		batched: (msg: string) => {
-			self.cells[id].stderr += msg;
-			self.postMessage({ type: 'stderr', id, message: msg });
-		}
-	});
-
 	try {
+		if (!self.pyodide) {
+			await initializePyodide();
+		}
+
+		// Update the cell state to "running"
+		self.cells[id] = {
+			id,
+			status: 'running',
+			result: null,
+			stdout: '',
+			stderr: ''
+		};
+
+		// Redirect stdout/stderr to stream updates
+		self.pyodide.setStdout({
+			batched: (msg: string) => {
+				self.cells[id].stdout += msg;
+				self.postMessage({ type: 'stdout', id, message: msg });
+			}
+		});
+		self.pyodide.setStderr({
+			batched: (msg: string) => {
+				self.cells[id].stderr += msg;
+				self.postMessage({ type: 'stderr', id, message: msg });
+			}
+		});
+
 		// Pre-check for imports in the code
 		const importRegex = /\bimport\s+([a-zA-Z0-9_.,\s]+)|\bfrom\s+([a-zA-Z0-9_.]+)\s+import/g;
 		const matches = Array.from(code.matchAll(importRegex));
@@ -124,31 +158,79 @@ const executeCode = async (id: string, code: string) => {
 		}
 		
 		// Common packages that might need installation
-		const knownPackages = ['numpy', 'pandas', 'matplotlib', 'seaborn', 'scikit-learn', 'scipy'];
+		const packageMap: Record<string, string> = {
+			'numpy': 'numpy',
+			'pandas': 'pandas',
+			'matplotlib': 'matplotlib',
+			'seaborn': 'seaborn',
+			'scipy': 'scipy',
+			'sklearn': 'scikit-learn'
+		};
 		
 		// Try to pre-install packages that are imported in the code
 		for (const pkg of potentialPackages) {
-			if (knownPackages.includes(pkg)) {
+			if (packageMap[pkg]) {
 				self.postMessage({ type: 'stdout', id, package: true, message: `[package] Checking/installing ${pkg}...` });
-				await installPackage(pkg);
+				await installPackage(packageMap[pkg]);
 			}
 		}
 
-		// Dynamically load required packages based on imports in the Python code
-		await self.pyodide.loadPackagesFromImports(code, {
-			messageCallback: (msg: string) => {
-				self.postMessage({ type: 'stdout', id, package: true, message: `[package] ${msg}` });
-			},
-			errorCallback: (msg: string) => {
-				self.postMessage({ type: 'stderr', id, package: true, message: `[package] ${msg}` });
-			}
-		});
+		// Configure matplotlib if it appears to be used
+		if (potentialPackages.has('matplotlib')) {
+			await self.pyodide.runPythonAsync(`
+import os
+os.environ["MPLBACKEND"] = "AGG"
+
+try:
+    import matplotlib.pyplot as plt
+    
+    # Override plt.show() to return base64 image
+    import base64
+    from io import BytesIO
+    
+    def show(*, block=None):
+        buf = BytesIO()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+        # encode to a base64 str
+        img_str = base64.b64encode(buf.read()).decode('utf-8')
+        plt.clf()
+        buf.close()
+        print(f"data:image/png;base64,{img_str}")
+    
+    plt.show = show
+except Exception as e:
+    print(f"Error configuring matplotlib: {e}")
+`);
+		}
+
+		// Dynamically load any remaining required packages
+		try {
+			await self.pyodide.loadPackagesFromImports(code, {
+				messageCallback: (msg: string) => {
+					self.postMessage({ type: 'stdout', id, package: true, message: `[package] ${msg}` });
+				},
+				errorCallback: (msg: string) => {
+					self.postMessage({ type: 'stderr', id, package: true, message: `[package] ${msg}` });
+				}
+			});
+		} catch (error) {
+			console.error('Error loading packages from imports:', error);
+			self.postMessage({ 
+				type: 'stderr', 
+				id, 
+				package: true, 
+				message: `[package] Error loading packages: ${error.toString()}` 
+			});
+			// Continue execution anyway - the error might be non-critical
+		}
 
 		// Execute the Python code
 		const result = await self.pyodide.runPythonAsync(code);
 		self.cells[id].result = result;
 		self.cells[id].status = 'completed';
 	} catch (error) {
+		console.error('Error executing code:', error);
 		self.cells[id].status = 'error';
 		self.cells[id].stderr += `\n${error.toString()}`;
 	} finally {
@@ -167,8 +249,17 @@ self.onmessage = async (event) => {
 
 	switch (type) {
 		case 'initialize':
-			await initializePyodide();
-			self.postMessage({ type: 'initialized' });
+			try {
+				await initializePyodide();
+				self.postMessage({ type: 'initialized' });
+			} catch (error) {
+				console.error('Initialization error:', error);
+				self.postMessage({ 
+					type: 'error', 
+					error: error.toString(),
+					message: 'Failed to initialize Pyodide environment'
+				});
+			}
 			break;
 
 		case 'execute':
