@@ -9,6 +9,7 @@
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 	import MCPServerSelector from '../MCPServerSelector.svelte';
+	import MCPInstructions from './MCPInstructions.svelte';
 
 	import { user, mcpServers, config } from '$lib/stores';
 	export let models = [];
@@ -21,6 +22,44 @@
 	
 	$: hasMCPServers = $mcpServers && $mcpServers.length > 0;
 	$: connectedMCPServers = $mcpServers?.filter(server => server.status === 'connected') || [];
+	
+	// Add MCP Server instructions to the system prompt when a server is selected
+	$: {
+		if (selectedMCPServer) {
+			const server = $mcpServers?.find(s => s.id === selectedMCPServer);
+			if (server?.status === 'connected') {
+				// Only update if it doesn't already contain MCP instructions
+				if (!params.system || !params.system.includes('MCP server')) {
+					const mcpSystemInstructions = getMCPSystemInstructions(server);
+					// Only append if there are instructions to add
+					if (mcpSystemInstructions) {
+						const currentPrompt = params.system || '';
+						// Only add if it's not already there
+						if (!currentPrompt.includes(mcpSystemInstructions)) {
+							params.system = currentPrompt + (currentPrompt ? '\n\n' : '') + mcpSystemInstructions;
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Function to generate system prompt instructions for MCP servers
+	function getMCPSystemInstructions(server) {
+		if (!server) return '';
+		
+		let instructions = '';
+		
+		if (server.type === 'filesystem') {
+			instructions = `You have access to a file system through the MCP filesystem server. When the user asks you to access files or directories, use the MCP filesystem server capabilities. The allowed path is ${server.args?.[server.args.length - 1] || '/home'}.`;
+		} else if (server.type === 'memory') {
+			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities.`;
+		} else {
+			instructions = `You have access to additional capabilities through the connected MCP server of type ${server.type}. When the user asks you to use these capabilities, utilize the MCP server.`;
+		}
+		
+		return instructions;
+	}
 </script>
 
 <div class="dark:text-white">
@@ -98,6 +137,8 @@
 									</div>
 								</div>
 							{/if}
+							
+							<MCPInstructions {selectedMCPServer} />
 						{/if}
 					</div>
 				</Collapsible>
