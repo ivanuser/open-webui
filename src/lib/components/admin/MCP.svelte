@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { WEBUI_NAME, mcpServers } from '$lib/stores';
+	import { WEBUI_NAME, mcpServers, settings } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import MCPServerList from './MCP/MCPServerList.svelte';
 	import MCPConnectionStatus from './MCP/MCPConnectionStatus.svelte';
 	import MCPServerModal from './MCP/MCPServerModal.svelte';
-	import MCPDashboard from './MCP/MCPDashboard.svelte';
 	import Plus from '../icons/Plus.svelte';
 	import Search from '../icons/Search.svelte';
 	import { getMCPServers } from '$lib/apis/mcp';
+	import { updateUserSettings } from '$lib/apis/users';
 	
 	const i18n = getContext('i18n');
 	
@@ -16,7 +16,6 @@
 	let showAddModal = false;
 	let selectedServer = null;
 	let isEditing = false;
-	let showDashboard = true; // Show dashboard by default
 	
 	// Initialize mcpServers if not already initialized
 	if (!$mcpServers) {
@@ -37,6 +36,34 @@
 			// Fetch MCP servers
 			const servers = await getMCPServers(localStorage.token);
 			mcpServers.set(servers);
+			
+			// Set up enabled servers in settings based on the connected servers
+			if ($settings) {
+				// Initialize enabledMcpServers if necessary
+				if (!$settings.enabledMcpServers) {
+					$settings.enabledMcpServers = [];
+				}
+				
+				// Get servers that should be connected based on settings
+				const enabledServerIds = $settings.enabledMcpServers || [];
+				if (enabledServerIds.length > 0) {
+					// Update server status based on enabled servers in settings
+					const updatedServers = servers.map(server => {
+						if (enabledServerIds.includes(server.id)) {
+							return { ...server, status: 'connected' };
+						}
+						return server;
+					});
+					
+					// Update the mcpServers store
+					mcpServers.set(updatedServers);
+					
+					// Save to localStorage
+					if (typeof localStorage !== 'undefined') {
+						localStorage.setItem('mcpServers', JSON.stringify(updatedServers));
+					}
+				}
+			}
 		} catch (error) {
 			console.error('Error fetching MCP servers:', error);
 			toast.error($i18n.t('Failed to fetch MCP servers'));
@@ -56,20 +83,32 @@
 		showAddModal = true;
 	};
 
-	const handleServerAdded = (event) => {
+	const handleServerAdded = async (event) => {
 		const newServer = event.detail;
 		mcpServers.update(servers => [...(servers || []), newServer]);
+		
+		// Save to localStorage
+		if (typeof localStorage !== 'undefined' && $mcpServers) {
+			localStorage.setItem('mcpServers', JSON.stringify($mcpServers));
+		}
+		
 		showAddModal = false;
 		toast.success(isEditing 
 			? $i18n.t('MCP server updated successfully') 
 			: $i18n.t('MCP server added successfully'));
 	};
 
-	const handleServerUpdated = (event) => {
+	const handleServerUpdated = async (event) => {
 		const updatedServer = event.detail;
 		mcpServers.update(servers => 
 			servers?.map(server => server.id === updatedServer.id ? updatedServer : server) || []
 		);
+		
+		// Save to localStorage
+		if (typeof localStorage !== 'undefined' && $mcpServers) {
+			localStorage.setItem('mcpServers', JSON.stringify($mcpServers));
+		}
+		
 		showAddModal = false;
 		toast.success($i18n.t('MCP server updated successfully'));
 	};
@@ -87,21 +126,6 @@
 			{$i18n.t('MCP')}
 			<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 			<span class="text-base font-lg text-gray-500 dark:text-gray-300">{filteredServers.length}</span>
-		</div>
-		
-		<div class="flex items-center gap-2">
-			<button 
-				class="px-2 py-1 text-sm rounded-lg {showDashboard ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}"
-				on:click={() => showDashboard = true}
-			>
-				{$i18n.t('Dashboard')}
-			</button>
-			<button
-				class="px-2 py-1 text-sm rounded-lg {!showDashboard ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}"
-				on:click={() => showDashboard = false}
-			>
-				{$i18n.t('Servers')}
-			</button>
 		</div>
 	</div>
 
@@ -129,15 +153,11 @@
 </div>
 
 <div class="mb-5">
-	{#if showDashboard}
-		<MCPDashboard servers={filteredServers} />
-	{:else}
-		<MCPConnectionStatus />
-		<MCPServerList 
-			servers={filteredServers} 
-			on:edit={event => handleEditServer(event.detail)}
-		/>
-	{/if}
+	<MCPConnectionStatus />
+	<MCPServerList 
+		servers={filteredServers} 
+		on:edit={event => handleEditServer(event.detail)}
+	/>
 </div>
 
 <div class="flex justify-end w-full mb-2">

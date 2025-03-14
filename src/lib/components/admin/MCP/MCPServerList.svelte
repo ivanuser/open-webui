@@ -8,7 +8,8 @@
 	import GarbageBin from '../../icons/GarbageBin.svelte';
 	import Gear from '../../icons/Gear.svelte';
 	import { connectToMCPServer, disconnectFromMCPServer, deleteMCPServer } from '$lib/apis/mcp';
-	import { mcpServers } from '$lib/stores';
+	import { mcpServers, settings } from '$lib/stores';
+	import { updateUserSettings } from '$lib/apis/users';
 	import MCPServerLogs from './MCPServerLogs.svelte';
 	
 	const i18n = getContext('i18n');
@@ -45,6 +46,20 @@
 					mcpServers.update(servers => 
 						servers?.map(s => s.id === server.id ? { ...s, status: 'disconnected' } : s) || []
 					);
+					
+					// Update settings to remove this server from enabled list
+					if ($settings) {
+						if (!$settings.enabledMcpServers) {
+							$settings.enabledMcpServers = [];
+						}
+						
+						$settings.enabledMcpServers = $settings.enabledMcpServers.filter(id => id !== server.id);
+						settings.set({...$settings});
+						
+						// Save to backend
+						await updateUserSettings(localStorage.token, { ui: $settings });
+					}
+					
 					toast.success($i18n.t('Disconnected from MCP server'));
 				} else {
 					throw new Error('Failed to disconnect');
@@ -60,6 +75,22 @@
 					mcpServers.update(servers => 
 						servers?.map(s => s.id === server.id ? { ...s, status: 'connected' } : s) || []
 					);
+					
+					// Update settings to add this server to enabled list
+					if ($settings) {
+						if (!$settings.enabledMcpServers) {
+							$settings.enabledMcpServers = [];
+						}
+						
+						if (!$settings.enabledMcpServers.includes(server.id)) {
+							$settings.enabledMcpServers = [...$settings.enabledMcpServers, server.id];
+							settings.set({...$settings});
+							
+							// Save to backend
+							await updateUserSettings(localStorage.token, { ui: $settings });
+						}
+					}
+					
 					toast.success($i18n.t('Connected to MCP server'));
 				} else {
 					throw new Error('Failed to connect');
@@ -87,6 +118,16 @@
 				mcpServers.update(servers => 
 					servers?.filter(s => s.id !== serverToDelete.id) || []
 				);
+				
+				// Also remove from enabled servers in settings
+				if ($settings && $settings.enabledMcpServers) {
+					$settings.enabledMcpServers = $settings.enabledMcpServers.filter(id => id !== serverToDelete.id);
+					settings.set({...$settings});
+					
+					// Save to backend
+					await updateUserSettings(localStorage.token, { ui: $settings });
+				}
+				
 				toast.success($i18n.t('MCP server deleted successfully'));
 				serverToDelete = null;
 				showDeleteConfirm = false;
