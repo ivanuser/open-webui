@@ -30,6 +30,7 @@
 	let show = false;
 	let searchValue = '';
 	let selectedServerIdx = 0;
+	let processingServer = null;
 
 	$: items = $mcpServers?.map(server => ({
 		value: server.id,
@@ -48,13 +49,28 @@
 		: items;
 		
 	$: selectedServer = filteredItems.find(item => item.value === value);
+	
+	// Make sure the selected server exists in the list
+	$: {
+		if (value && items.length > 0 && !items.some(item => item.value === value)) {
+			console.log(`Selected server ${value} not found in mcpServers list`);
+			// Reset selection if server doesn't exist anymore
+			value = '';
+		}
+	}
 
 	const toggleConnection = async (serverId, currentStatus) => {
-		// Skip if already in a transitional state
+		// Skip if already in a transitional state or currently processing
+		if (processingServer === serverId) {
+			return;
+		}
+		
 		const server = $mcpServers.find(s => s.id === serverId);
 		if (!server || server.status === 'connecting' || server.status === 'disconnecting') {
 			return;
 		}
+		
+		processingServer = serverId;
 		
 		try {
 			if (currentStatus === 'connected') {
@@ -68,6 +84,17 @@
 					mcpServers.update(servers => 
 						servers?.map(s => s.id === serverId ? { ...s, status: 'disconnected' } : s) || []
 					);
+					
+					// If this was the selected server, maybe deselect it (since it's now disconnected)
+					if (value === serverId) {
+						// Only deselect if there's another connected server
+						const connectedServer = $mcpServers.find(s => s.status === 'connected');
+						if (connectedServer) {
+							value = connectedServer.id;
+							dispatch('select', { value: connectedServer.id, server: connectedServer });
+						}
+					}
+					
 					toast.success($i18n.t('Disconnected from MCP server'));
 				} else {
 					throw new Error('Failed to disconnect');
@@ -83,6 +110,15 @@
 					mcpServers.update(servers => 
 						servers?.map(s => s.id === serverId ? { ...s, status: 'connected' } : s) || []
 					);
+					
+					// If no server is currently selected, select this one since it's now connected
+					if (!value) {
+						value = serverId;
+						const connectedServer = $mcpServers.find(s => s.id === serverId);
+						if (connectedServer) {
+							dispatch('select', { value: serverId, server: connectedServer });
+						}
+					}
 					
 					// Update settings to include this server
 					if (!$settings) {
@@ -108,8 +144,24 @@
 				servers?.map(s => s.id === serverId ? { ...s, status: 'error' } : s) || []
 			);
 			toast.error($i18n.t('Error connecting to MCP server'));
+		} finally {
+			processingServer = null;
 		}
 	};
+	
+	onMount(() => {
+		// Check if the value is set but not valid
+		if (value && $mcpServers && !$mcpServers.some(server => server.id === value)) {
+			console.log(`Initial server ${value} not found in mcpServers list`);
+			// Reset the value if it doesn't exist in the list
+			value = '';
+		}
+		
+		// If there's a default server in settings, use it if no value is set
+		if (!value && $settings?.defaultMcpServer && $mcpServers?.some(s => s.id === $settings.defaultMcpServer)) {
+			value = $settings.defaultMcpServer;
+		}
+	});
 </script>
 
 <DropdownMenu.Root
@@ -167,6 +219,7 @@
 						on:keydown={(e) => {
 							if (e.code === 'Enter' && filteredItems.length > 0) {
 								value = filteredItems[selectedServerIdx].value;
+								dispatch('select', filteredItems[selectedServerIdx]);
 								show = false;
 								return;
 							} else if (e.code === 'ArrowDown') {
@@ -196,7 +249,7 @@
 				{:else}
 					{#each filteredItems as item, index}
 						<div
-							class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted {index === selectedServerIdx ? 'bg-gray-100 dark:bg-gray-800 group-hover:bg-transparent' : ''}"
+							class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted {index === selectedServerIdx ? 'bg-gray-100 dark:bg-gray-800 group-hover:bg-transparent' : ''} {item.value === value ? 'border-l-2 border-blue-500 dark:border-blue-400' : ''}"
 							data-arrow-selected={index === selectedServerIdx}
 						>
 							<button
@@ -248,7 +301,7 @@
 								</div>
 							{/if}
 
-							<div class="ml-auto {(item.server.status === 'connecting' || item.server.status === 'disconnecting') ? 'opacity-50 cursor-not-allowed' : ''}">
+							<div class="ml-auto {(item.server.status === 'connecting' || item.server.status === 'disconnecting' || processingServer === item.server.id) ? 'opacity-50 cursor-not-allowed' : ''}">
 								<div on:click|stopPropagation={() => toggleConnection(item.server.id, item.server.status)}>
 									<Switch 
 										state={item.server.status === 'connected'} 

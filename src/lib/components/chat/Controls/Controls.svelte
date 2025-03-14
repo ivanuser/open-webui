@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, getContext } from 'svelte';
+	import { createEventDispatcher, getContext, onMount } from 'svelte';
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
@@ -11,7 +11,7 @@
 	import MCPServerSelector from '../MCPServerSelector.svelte';
 	import MCPInstructions from './MCPInstructions.svelte';
 
-	import { user, mcpServers, config } from '$lib/stores';
+	import { user, mcpServers, config, settings } from '$lib/stores';
 	export let models = [];
 	export let chatFiles = [];
 	export let params = {};
@@ -69,6 +69,33 @@ For example, if asked to create a file at ${allowedPath}/example.txt, you should
 		
 		return instructions;
 	}
+	
+	onMount(() => {
+		// Set the selected MCP server from settings if available
+		if ($settings?.defaultMcpServer) {
+			selectedMCPServer = $settings.defaultMcpServer;
+		} else if ($settings?.enabledMcpServers && $settings.enabledMcpServers.length > 0) {
+			// Use the first enabled server if no default is set
+			selectedMCPServer = $settings.enabledMcpServers[0];
+		}
+		
+		// If there's a selection, verify it exists and is connected
+		if (selectedMCPServer && $mcpServers) {
+			const server = $mcpServers.find(s => s.id === selectedMCPServer);
+			if (!server) {
+				// Reset if server doesn't exist
+				selectedMCPServer = '';
+			} else if (server.status !== 'connected') {
+				// Optionally, you could try to connect automatically here
+				console.log(`Selected MCP server ${selectedMCPServer} is not connected`);
+			}
+		}
+		
+		// Set showMCP to true if we have a selected server
+		if (selectedMCPServer) {
+			showMCP = true;
+		}
+	});
 </script>
 
 <div class="dark:text-white">

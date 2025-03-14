@@ -24,23 +24,40 @@
 			return;
 		}
 		
-		// Update the settings
-		if (!$settings) {
-			$settings = {};
-		}
-		
-		if (!$settings.enabledMcpServers) {
-			$settings.enabledMcpServers = [];
-		}
-		
-		if (!$settings.enabledMcpServers.includes(selectedServer)) {
-			$settings.enabledMcpServers = [...$settings.enabledMcpServers, selectedServer];
-		}
-		
-		settings.set($settings);
-		await updateUserSettings(localStorage.token, { ui: $settings });
+		try {
+			// Update the settings - create a new settings object to ensure a clean update
+			const updatedSettings = { ...$settings } || {};
+			
+			// Make sure enabledMcpServers is an array
+			if (!updatedSettings.enabledMcpServers) {
+				updatedSettings.enabledMcpServers = [];
+			}
+			
+			// Make sure the selected server is in the enabled servers list
+			if (!updatedSettings.enabledMcpServers.includes(selectedServer)) {
+				updatedSettings.enabledMcpServers.push(selectedServer);
+			}
+			
+			// Set the default MCP server
+			updatedSettings.defaultMcpServer = selectedServer;
+			
+			// Update the store
+			settings.set(updatedSettings);
+			
+			// Save to localStorage for immediate persistence
+			if (typeof localStorage !== 'undefined') {
+				localStorage.setItem('userSettings', JSON.stringify(updatedSettings));
+			}
+			
+			// Update on the backend
+			const result = await updateUserSettings(localStorage.token, { ui: updatedSettings });
+			console.log('Settings updated on backend:', result);
 
-		toast.success($i18n.t('Default MCP server updated'));
+			toast.success($i18n.t('Default MCP server updated'));
+		} catch (error) {
+			console.error('Error saving default MCP server:', error);
+			toast.error($i18n.t('Failed to save default server. Please try again.'));
+		}
 	};
 	
 	onMount(async () => {
@@ -48,15 +65,66 @@
 		if (!$mcpServers || $mcpServers.length === 0) {
 			try {
 				const servers = await getMCPServers(localStorage.token);
+				
+				// Make sure to persist the servers to localStorage immediately
+				if (typeof localStorage !== 'undefined' && servers) {
+					localStorage.setItem('mcpServers', JSON.stringify(servers));
+				}
+				
 				mcpServers.set(servers);
 			} catch (error) {
 				console.error('Error fetching MCP servers in chat:', error);
 			}
 		}
 		
-		// Set the default server from settings if available
-		if ($settings?.enabledMcpServers && $settings.enabledMcpServers.length > 0 && !selectedServer) {
-			selectedServer = $settings.enabledMcpServers[0];
+		// First try to get the default server
+		if ($settings?.defaultMcpServer && !selectedServer) {
+			// Verify the default server exists and is connected
+			const defaultServer = $mcpServers?.find(s => s.id === $settings.defaultMcpServer);
+			if (defaultServer && defaultServer.status === 'connected') {
+				selectedServer = $settings.defaultMcpServer;
+			} 
+			// If default server exists but isn't connected, try to connect to it
+			else if (defaultServer) {
+				selectedServer = $settings.defaultMcpServer;
+				console.log('Default server exists but is not connected:', selectedServer);
+			}
+		}
+		// If no default is set, try to get the first enabled server
+		else if ($settings?.enabledMcpServers && $settings.enabledMcpServers.length > 0 && !selectedServer) {
+			// Find the first enabled server that's also connected
+			const connectedEnabledServer = $mcpServers?.find(
+				s => $settings.enabledMcpServers.includes(s.id) && s.status === 'connected'
+			);
+			
+			if (connectedEnabledServer) {
+				selectedServer = connectedEnabledServer.id;
+			} else {
+				// If no enabled and connected servers, just use the first enabled one
+				selectedServer = $settings.enabledMcpServers[0];
+			}
+		}
+		
+		// If we have a selected server, verify it exists in the mcpServers list
+		if (selectedServer && $mcpServers) {
+			const serverExists = $mcpServers.some(s => s.id === selectedServer);
+			if (!serverExists) {
+				// Reset the selection if the server no longer exists
+				selectedServer = '';
+				
+				// Also update settings if we're removing the default server
+				if ($settings?.defaultMcpServer === selectedServer) {
+					const updatedSettings = { ...$settings };
+					updatedSettings.defaultMcpServer = null;
+					settings.set(updatedSettings);
+					
+					// Also update localStorage and backend
+					if (typeof localStorage !== 'undefined') {
+						localStorage.setItem('userSettings', JSON.stringify(updatedSettings));
+					}
+					await updateUserSettings(localStorage.token, { ui: updatedSettings });
+				}
+			}
 		}
 	});
 </script>
