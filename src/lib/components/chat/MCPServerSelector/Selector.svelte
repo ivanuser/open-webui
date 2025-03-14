@@ -20,7 +20,7 @@
 	export let searchEnabled = true;
 	export let searchPlaceholder = $i18n.t('Search MCP Servers');
 	export let className = 'w-[32rem]';
-	export let triggerClassName = 'text-lg';
+	export let triggerClassName = '';
 	
 	// Initialize mcpServers if not already initialized
 	if (!$mcpServers) {
@@ -122,15 +122,24 @@
 	closeFocus={false}
 >
 	<DropdownMenu.Trigger
-		class="relative w-full font-primary"
+		class="relative w-full font-primary border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2"
 		aria-label={placeholder}
 		id="mcp-selector-{id}-button"
 	>
 		<div
-			class="flex w-full text-left px-0.5 outline-hidden bg-transparent truncate {triggerClassName} justify-between font-medium placeholder-gray-400 focus:outline-hidden"
+			class="flex w-full text-left outline-hidden bg-transparent truncate {triggerClassName} justify-between text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-hidden"
 		>
 			{#if selectedServer}
-				{selectedServer.label}
+				<div class="flex items-center">
+					{#if selectedServer.server.status === 'connected'}
+						<div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+					{:else if selectedServer.server.status === 'error'}
+						<div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+					{:else}
+						<div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+					{/if}
+					{selectedServer.label}
+				</div>
 			{:else}
 				{placeholder}
 			{/if}

@@ -62,28 +62,31 @@
 </script>
 
 <div class="flex flex-col w-full items-start">
-	<div class="flex w-full max-w-fit">
-		<div class="overflow-hidden w-full">
-			<div class="mr-1 max-w-full">
-				<Selector
-					id="mcp-server"
-					placeholder={$i18n.t('Select MCP Server')}
-					bind:value={selectedServer}
-					on:select={(event) => {
-						const server = event.detail.server;
-						// Ensure the server is connected if it was selected
-						if (server.status !== 'connected') {
-							toast.info($i18n.t('Connect to the MCP server to use it'));
-						}
-					}}
-				/>
-			</div>
+	<div class="flex w-full">
+		<div class="w-full">
+			<Selector
+				id="mcp-server"
+				placeholder={$i18n.t('Select MCP Server')}
+				bind:value={selectedServer}
+				on:select={(event) => {
+					const server = event.detail.server;
+					// Ensure the server is connected if it was selected
+					if (server.status !== 'connected') {
+						toast.info($i18n.t('Connect to the MCP server to use it'));
+					}
+				}}
+			/>
 		</div>
 	</div>
 </div>
 
-{#if showSetDefault}
-	<div class="absolute text-left mt-[1px] ml-1 text-[0.7rem] text-gray-500 font-primary">
-		<button on:click={saveDefaultServer}>{$i18n.t('Set as default')}</button>
+{#if showSetDefault && selectedServer}
+	<div class="flex justify-start w-full mt-2">
+		<button 
+			on:click={saveDefaultServer}
+			class="text-xs px-2 py-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+		>
+			{$i18n.t('Set as default')}
+		</button>
 	</div>
 {/if}
