@@ -51,11 +51,20 @@
 		let instructions = '';
 		
 		if (server.type === 'filesystem') {
-			instructions = `You have access to a file system through the MCP filesystem server. When the user asks you to access files or directories, use the MCP filesystem server capabilities. The allowed path is ${server.args?.[server.args.length - 1] || '/home'}.`;
+			const allowedPath = server.args?.[server.args.length - 1] || '/home';
+			instructions = `You have access to a file system through the MCP filesystem server. You can perform the following operations:
+1. READ files by accessing their path
+2. LIST directories to see their contents
+3. CREATE new files by writing content to a path
+4. WRITE to existing files to modify their content
+
+When the user asks you to access, create, or modify files or directories, use the MCP filesystem server capabilities. The allowed path is ${allowedPath}. 
+
+For example, if asked to create a file at ${allowedPath}/example.txt, you should create that file. If asked to list files in ${allowedPath}, you should list those files. Always use these capabilities when users mention files or directories.`;
 		} else if (server.type === 'memory') {
-			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities.`;
+			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities. This allows you to store information persistently and recall it in future conversations, even after the current session ends.`;
 		} else {
-			instructions = `You have access to additional capabilities through the connected MCP server of type ${server.type}. When the user asks you to use these capabilities, utilize the MCP server.`;
+			instructions = `You have access to additional capabilities through the connected MCP server of type ${server.type}. When the user asks you to use these capabilities, utilize the MCP server. Follow the user's instructions regarding the MCP server carefully.`;
 		}
 		
 		return instructions;

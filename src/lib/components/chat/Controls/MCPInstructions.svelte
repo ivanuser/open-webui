@@ -23,7 +23,7 @@
     
     <p class="text-blue-800 dark:text-blue-300 mb-2">
       {#if serverType === 'filesystem'}
-        {$i18n.t('This MCP server provides access to files and directories. To use it in your conversation, tell the model explicitly to use the MCP server.')}
+        {$i18n.t('This MCP server provides access to files and directories. To use it in your conversation, tell the model explicitly to use the MCP server for reading, writing, or listing files.')}
       {:else if serverType === 'memory'}
         {$i18n.t('This MCP server provides persistent memory capabilities. To use it in your conversation, tell the model explicitly to use the MCP server.')}
       {:else}
@@ -32,14 +32,17 @@
     </p>
     
     <div class="bg-white dark:bg-gray-800 p-2 rounded border-l-4 border-blue-500 text-gray-700 dark:text-gray-300">
-      <strong>{$i18n.t('Example prompt')}:</strong>
+      <strong>{$i18n.t('Example prompts')}:</strong>
       <div class="mt-1 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
         {#if serverType === 'filesystem'}
-          {$i18n.t('Using the MCP filesystem server, please list the files in {directory}', { directory: server.args?.[server.args.length - 1] || '/home' })}
+          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, please list the files in {directory}', { directory: server.args?.[server.args.length - 1] || '/home' })}</div>
+          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, read the content of {file}', { file: `${server.args?.[server.args.length - 1] || '/home'}/example.txt` })}</div>
+          <div>• {$i18n.t('Using the MCP filesystem server, create a file named {file} with this content: {content}', { file: `${server.args?.[server.args.length - 1] || '/home'}/filename.txt`, content: "Hello world" })}</div>
         {:else if serverType === 'memory'}
-          {$i18n.t('Using the MCP memory server, please remember this information: {info}', { info: $i18n.t('Important fact to remember') })}
+          <div class="mb-1">• {$i18n.t('Using the MCP memory server, please remember this information: {info}', { info: $i18n.t('Important fact to remember') })}</div>
+          <div>• {$i18n.t('Using the MCP memory server, recall what you know about {topic}', { topic: $i18n.t('specific topic') })}</div>
         {:else}
-          {$i18n.t('Using the MCP server, please {action}', { action: $i18n.t('perform the desired action') })}
+          <div>• {$i18n.t('Using the MCP server, please {action}', { action: $i18n.t('perform the desired action') })}</div>
         {/if}
       </div>
     </div>
