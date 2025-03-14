@@ -66,9 +66,9 @@ async function downloadPackages() {
 	
 	let pyodide;
 	try {
+		// Use the local node_modules path for loading Pyodide
 		pyodide = await loadPyodide({
-			indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/',
-			packageCacheDir: 'static/pyodide'
+			indexURL: path.resolve('node_modules/pyodide'),
 		});
 	} catch (err) {
 		console.error('Failed to load Pyodide:', err);
@@ -170,13 +170,19 @@ async function copyPyodide() {
 	try {
 		const entries = await readdir('node_modules/pyodide');
 		for (const entry of entries) {
-			const source = `node_modules/pyodide/${entry}`;
-			const target = `static/pyodide/${entry}`;
-			await copyFile(source, target);
+			const source = path.join('node_modules/pyodide', entry);
+			const target = path.join('static/pyodide', entry);
+			
+			try {
+				await copyFile(source, target);
+				console.log(`Copied: ${entry}`);
+			} catch (copyErr) {
+				console.error(`Error copying ${entry}:`, copyErr);
+			}
 		}
 		console.log('Successfully copied Pyodide files');
 	} catch (err) {
-		console.error('Error copying Pyodide files:', err);
+		console.error('Error listing Pyodide files:', err);
 	}
 }
 
@@ -184,8 +190,8 @@ async function copyPyodide() {
 (async () => {
 	try {
 		initNetworkProxyFromEnv();
+		await copyPyodide(); // First copy the files to ensure they're available
 		await downloadPackages();
-		await copyPyodide();
 		console.log('Pyodide setup completed successfully.');
 	} catch (err) {
 		console.error('Pyodide setup failed:', err);
