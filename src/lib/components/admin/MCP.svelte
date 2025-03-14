@@ -5,6 +5,8 @@
 	import MCPServerList from './MCP/MCPServerList.svelte';
 	import MCPConnectionStatus from './MCP/MCPConnectionStatus.svelte';
 	import MCPServerModal from './MCP/MCPServerModal.svelte';
+	import MCPDashboard from './MCP/MCPDashboard.svelte';
+	import Tabs from '../common/Tabs.svelte';
 	import Plus from '../icons/Plus.svelte';
 	import Search from '../icons/Search.svelte';
 	import { getMCPServers } from '$lib/apis/mcp';
@@ -16,6 +18,7 @@
 	let showAddModal = false;
 	let selectedServer = null;
 	let isEditing = false;
+	let activeTab = 0;
 	
 	// Initialize mcpServers if not already initialized
 	if (!$mcpServers) {
@@ -129,7 +132,7 @@
 		</div>
 	</div>
 
-	<div class="flex w-full space-x-2">
+	<div class="flex w-full space-x-2 mb-4">
 		<div class="flex flex-1">
 			<div class="self-center ml-1 mr-3">
 				<Search className="size-3.5" />
@@ -150,25 +153,31 @@
 			</button>
 		</div>
 	</div>
+	
+	<Tabs bind:activeTab tabs={[$i18n.t('Servers'), $i18n.t('Dashboard')]} />
 </div>
 
-<div class="mb-5">
-	<MCPConnectionStatus />
-	<MCPServerList 
-		servers={filteredServers} 
-		on:edit={event => handleEditServer(event.detail)}
-	/>
-</div>
-
-<div class="flex justify-end w-full mb-2">
-	<div class="flex space-x-2">
-		<button
-			class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
-			on:click={handleAddServer}
-		>
-			<div class="self-center mr-2 font-medium line-clamp-1">{$i18n.t('Add MCP Server')}</div>
-		</button>
-	</div>
+<div class="mt-4">
+	{#if activeTab === 0}
+		<MCPConnectionStatus />
+		<MCPServerList 
+			servers={filteredServers} 
+			on:edit={event => handleEditServer(event.detail)}
+		/>
+		
+		<div class="flex justify-end w-full mt-4 mb-2">
+			<div class="flex space-x-2">
+				<button
+					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+					on:click={handleAddServer}
+				>
+					<div class="self-center mr-2 font-medium line-clamp-1">{$i18n.t('Add MCP Server')}</div>
+				</button>
+			</div>
+		</div>
+	{:else if activeTab === 1}
+		<MCPDashboard servers={$mcpServers || []} />
+	{/if}
 </div>
 
 {#if showAddModal}
