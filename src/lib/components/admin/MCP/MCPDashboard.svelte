@@ -2,6 +2,7 @@
 	import { getContext, onMount, onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import MCPServerLogs from './MCPServerLogs.svelte';
+	import MCPEventDetails from './MCPEventDetails.svelte';
 	
 	const i18n = getContext('i18n');
 	
@@ -9,6 +10,8 @@
 	
 	let selectedServerForLogs = null;
 	let showLogs = false;
+	let selectedEvent = null;
+	let showEventDetails = false;
 	let stats = {
 		totalRequests: Math.floor(Math.random() * 1000),
 		totalErrors: Math.floor(Math.random() * 100),
@@ -16,6 +19,72 @@
 		peakMemoryUsage: Math.floor(Math.random() * 500)
 	};
 	let updateInterval;
+	let filterStatus = 'all'; // 'all', 'success', 'warning', 'error'
+	let searchQuery = '';
+	
+	// Generate system events
+	let systemEvents = [];
+	
+	// Generate initial system events
+	const generateInitialEvents = () => {
+		const events = [];
+		const now = new Date();
+		const statuses = ['Success', 'Warning', 'Error'];
+		const eventTypes = [
+			'Connection Established', 
+			'Server Started', 
+			'Data Request', 
+			'API Endpoint Called', 
+			'Configuration Changed',
+			'Connection Lost',
+			'Server Stopped',
+			'Memory Warning',
+			'Permission Denied',
+			'Authentication Failed'
+		];
+		
+		// Generate random events
+		for (let i = 0; i < 15; i++) {
+			const randomServer = servers[Math.floor(Math.random() * servers.length)] || 
+				{name: 'Unknown', type: 'unknown'};
+			const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+			const randomEvent = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+			const eventTime = new Date(now.getTime() - i * 1000 * 60 * Math.floor(Math.random() * 30));
+			
+			// Generate error-specific additional info
+			let additionalInfo = null;
+			if (randomStatus === 'Error') {
+				if (randomEvent === 'Connection Established') {
+					additionalInfo = 'Error: Connection refused - ECONNREFUSED 127.0.0.1:8080';
+				} else if (randomEvent === 'Server Started') {
+					additionalInfo = 'Error: Port 8080 already in use';
+				} else if (randomEvent === 'Permission Denied') {
+					additionalInfo = 'Error: EACCES - Permission denied, path: /var/data/mcp';
+				} else if (randomEvent === 'Memory Warning') {
+					additionalInfo = 'Error: Memory usage exceeded threshold: 95% (1.9GB/2GB)';
+				}
+			} else if (randomStatus === 'Warning') {
+				if (randomEvent === 'Data Request') {
+					additionalInfo = 'Warning: Slow query detected (duration: 5.2s)';
+				} else if (randomEvent === 'Memory Warning') {
+					additionalInfo = 'Warning: Memory usage approaching threshold: 75% (1.5GB/2GB)';
+				} else if (randomEvent === 'API Endpoint Called') {
+					additionalInfo = 'Warning: Deprecated API endpoint used: /api/v1/legacy';
+				}
+			}
+			
+			events.push({
+				id: `event-${i}`,
+				time: eventTime.toLocaleString(),
+				server: randomServer,
+				event: randomEvent,
+				status: randomStatus,
+				additionalInfo
+			});
+		}
+		
+		return events;
+	};
 	
 	// Generate summary chart data
 	const generateChartData = () => {
@@ -43,6 +112,7 @@
 	// Update stats periodically
 	onMount(() => {
 		chartData = generateChartData();
+		systemEvents = generateInitialEvents();
 		
 		updateInterval = setInterval(() => {
 			// Update random stats
@@ -55,6 +125,38 @@
 			
 			// Regenerate chart data
 			chartData = generateChartData();
+			
+			// Occasionally add new events
+			if (Math.random() > 0.7) {
+				const statuses = ['Success', 'Warning', 'Error'];
+				const eventTypes = [
+					'Connection Established', 
+					'Server Started', 
+					'Data Request', 
+					'API Endpoint Called', 
+					'Configuration Changed',
+					'Connection Lost',
+					'Memory Warning'
+				];
+				
+				const randomServer = servers[Math.floor(Math.random() * servers.length)] || 
+					{name: 'Unknown', type: 'unknown'};
+				const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+				const randomEvent = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+				
+				// Add new event at the beginning
+				systemEvents = [
+					{
+						id: `event-${Date.now()}`,
+						time: new Date().toLocaleString(),
+						server: randomServer,
+						event: randomEvent,
+						status: randomStatus,
+						additionalInfo: null
+					},
+					...systemEvents.slice(0, 14) // Keep only the most recent 15 events
+				];
+			}
 		}, 10000);
 	});
 	
@@ -71,9 +173,30 @@
 		}
 	}
 	
+	// Filter events based on status and search query
+	$: filteredEvents = systemEvents.filter(event => {
+		// Filter by status
+		if (filterStatus !== 'all' && event.status.toLowerCase() !== filterStatus) {
+			return false;
+		}
+		
+		// Filter by search query
+		if (searchQuery && !event.event.toLowerCase().includes(searchQuery.toLowerCase()) && 
+			!event.server.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+			return false;
+		}
+		
+		return true;
+	});
+	
 	const viewLogs = (server) => {
 		selectedServerForLogs = server.id;
 		showLogs = true;
+	};
+	
+	const viewEventDetails = (event) => {
+		selectedEvent = event;
+		showEventDetails = true;
 	};
 </script>
 
@@ -189,7 +312,31 @@
 </div>
 
 <div class="bg-white dark:bg-gray-850 rounded-lg p-4 shadow">
-	<h3 class="text-base font-medium mb-2">{$i18n.t('Recent System Events')}</h3>
+	<div class="flex justify-between items-center mb-4">
+		<h3 class="text-base font-medium">{$i18n.t('System Events')}</h3>
+		
+		<div class="flex items-center space-x-2">
+			<div class="relative">
+				<input 
+					type="text" 
+					class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-gray-800"
+					placeholder={$i18n.t('Search events...')}
+					bind:value={searchQuery}
+				/>
+			</div>
+			
+			<select 
+				bind:value={filterStatus}
+				class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-gray-800"
+			>
+				<option value="all">{$i18n.t('All')}</option>
+				<option value="success">{$i18n.t('Success')}</option>
+				<option value="warning">{$i18n.t('Warning')}</option>
+				<option value="error">{$i18n.t('Error')}</option>
+			</select>
+		</div>
+	</div>
+	
 	<div class="overflow-hidden overflow-x-auto">
 		<table class="min-w-full text-sm">
 			<thead>
@@ -198,38 +345,64 @@
 					<th class="py-2 px-3 text-left">{$i18n.t('Server')}</th>
 					<th class="py-2 px-3 text-left">{$i18n.t('Event')}</th>
 					<th class="py-2 px-3 text-left">{$i18n.t('Status')}</th>
+					<th class="py-2 px-3 text-left">{$i18n.t('Actions')}</th>
 				</tr>
 			</thead>
 			<tbody>
-				{#each Array(5).fill(0) as _, i}
-					{@const date = new Date(Date.now() - i * 1000 * 60 * Math.floor(Math.random() * 60))}
-					{@const randomServer = servers[Math.floor(Math.random() * servers.length)] || {name: 'Unknown', type: 'unknown'}}
-					{@const events = ['Connection Established', 'Server Started', 'Data Request', 'API Endpoint Called', 'Configuration Changed']}
-					{@const statuses = ['Success', 'Warning', 'Error']}
-					{@const randomEvent = events[Math.floor(Math.random() * events.length)]}
-					{@const randomStatus = statuses[Math.floor(Math.random() * statuses.length)]}
-					<tr class="border-t border-gray-100 dark:border-gray-800">
-						<td class="py-2 px-3">{date.toLocaleTimeString()}</td>
-						<td class="py-2 px-3">
-							<div class="flex items-center">
-								<span>{randomServer.name}</span>
-								<span class="ml-1 text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded text-gray-700 dark:text-gray-300">
-									{randomServer.type}
-								</span>
-							</div>
-						</td>
-						<td class="py-2 px-3">{randomEvent}</td>
-						<td class="py-2 px-3">
-							<span class="{
-								randomStatus === 'Success' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-								randomStatus === 'Warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-								'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-							} px-2 py-0.5 rounded-full text-xs">
-								{randomStatus}
-							</span>
+				{#if filteredEvents.length === 0}
+					<tr>
+						<td colspan="5" class="py-8 text-center text-gray-500">
+							{#if searchQuery || filterStatus !== 'all'}
+								{$i18n.t('No events match your filters.')}
+							{:else}
+								{$i18n.t('No system events available.')}
+							{/if}
 						</td>
 					</tr>
-				{/each}
+				{:else}
+					{#each filteredEvents as event}
+						<tr class="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
+							<td class="py-2 px-3">{event.time}</td>
+							<td class="py-2 px-3">
+								<div class="flex items-center">
+									<span>{event.server.name}</span>
+									{#if event.server.type}
+										<span class="ml-1 text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded text-gray-700 dark:text-gray-300">
+											{event.server.type}
+										</span>
+									{/if}
+								</div>
+							</td>
+							<td class="py-2 px-3">
+								<div class="flex items-center">
+									<span>{event.event}</span>
+									{#if event.additionalInfo}
+										<span class="ml-1 text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded text-blue-700 dark:text-blue-300">
+											{$i18n.t('Details')}
+										</span>
+									{/if}
+								</div>
+							</td>
+							<td class="py-2 px-3">
+								<span class="{
+									event.status === 'Success' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+									event.status === 'Warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+									'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+								} px-2 py-0.5 rounded-full text-xs">
+									{event.status}
+								</span>
+							</td>
+							<td class="py-2 px-3">
+								<button 
+									class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+									on:click={() => viewEventDetails(event)}
+								>
+									{$i18n.t('View Details')}
+								</button>
+							</td>
+						</tr>
+					{/each}
+				{/if}
 			</tbody>
 		</table>
 	</div>
@@ -238,4 +411,9 @@
 <MCPServerLogs 
 	bind:show={showLogs}
 	serverId={selectedServerForLogs}
+/>
+
+<MCPEventDetails
+	bind:show={showEventDetails}
+	event={selectedEvent}
 />
