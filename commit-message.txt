@@ -1,23 +1,23 @@
-feat: Implement Extension System Architecture
+feat: Integrate Extension Marketplace with Open WebUI
 
-This commit implements a comprehensive Extension System Architecture for Open WebUI:
+This commit implements the integration between Open WebUI and the extension marketplace:
 
-- Fix build error in `src/lib/apis/openai/index.js` by explicitly re-exporting `chatCompletion`
-- Create Extension Manager with backend and frontend components
-- Implement Extension Framework with base classes and utilities
-- Create an example extension demonstrating the system
-- Add detailed documentation for creating and managing extensions
-- Integrate with the existing extension system in Open WebUI
+- Create a new marketplace module with API client for fetching extensions
+- Add marketplace configuration with endpoints for the extension registry
+- Implement UI components for browsing and installing marketplace extensions:
+  - MarketplaceTab: Main component for marketplace browsing
+  - MarketplaceCard: Component to display extension information
+  - MarketplaceFeatured: Component for featured extensions
+  - ExtensionDetails: Component for detailed extension information
+- Update ExtensionManager to include a marketplace tab
+- Update extensions index to export the marketplace module
 
-The Extension System provides:
-- A framework for developing extensions
-- A manager for installing and configuring extensions
-- Support for UI, API, model, tool, and theme extensions
-- A hook system for extensions to integrate with Open WebUI
-- Documentation for developers and users
+The integration allows users to:
+- Browse extensions in the marketplace
+- View extension details including documentation
+- Install extensions directly from the marketplace
+- Filter extensions by category and type
+- Search for extensions
 
-This implementation also includes:
-- REST API endpoints for managing extensions
-- Svelte components for the admin interface
-- Installation scripts for easy deployment
-- Example extension with UI integration
+This enhances the user experience by providing a centralized repository of
+extensions that can be easily discovered and installed.

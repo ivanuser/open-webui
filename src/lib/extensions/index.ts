@@ -12,6 +12,9 @@ export * from './api';
 // Export manager
 export * from './manager';
 
+// Export marketplace
+export * from './marketplace';
+
 // Export integration
 export * from './integration';
 
