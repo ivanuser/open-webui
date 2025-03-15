@@ -4,7 +4,7 @@
 	const i18n = getContext('i18n');
 
 	import { models } from '$lib/stores';
-	import { verifyOpenAIConnection } from '$lib/apis/openai';
+	import { verifyOpenAIConnection } from '$lib/apis/openai/index.ts';
 	import { verifyOllamaConnection } from '$lib/apis/ollama';
 
 	import Modal from '$lib/components/common/Modal.svelte';
