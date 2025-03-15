@@ -4,12 +4,13 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Button, Alert, AlertTitle, AlertDescription, Input, Textarea, Label, Select, Checkbox } from '$lib/components/ui';
-  import Upload from '$lib/components/icons/CloudArrowUp.svelte';
+  import Checkbox from '$lib/components/common/Checkbox.svelte';
+  import Textarea from '$lib/components/common/Textarea.svelte';
   import Info from '$lib/components/icons/Info.svelte';
   import type { Extension, ExtensionManifest, ExtensionSetting } from '../../framework/types';
   import { installExtension, updateExtensionSettings } from '../../api/registry';
   import { validateManifest, loadManifest } from '../../framework/utils';
+  import CloudArrowUp from '$lib/components/icons/CloudArrowUp.svelte';
   
   // Props
   export let extension: Extension | null = null;
@@ -176,16 +177,17 @@
   function renderStringInput(setting: ExtensionSetting) {
     return (
       <div class="space-y-2">
-        <Label for={setting.id}>{setting.name}</Label>
-        <Input
+        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+        <input
           id={setting.id}
           type="text"
+          class="w-full px-3 py-2 border rounded-md"
           placeholder={setting.placeholder}
           bind:value={settingsForm[setting.id]}
           required={setting.required}
         />
         {#if setting.description}
-          <p class="text-xs text-muted-foreground">{setting.description}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
         {/if}
       </div>
     );
@@ -194,10 +196,11 @@
   function renderNumberInput(setting: ExtensionSetting) {
     return (
       <div class="space-y-2">
-        <Label for={setting.id}>{setting.name}</Label>
-        <Input
+        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+        <input
           id={setting.id}
           type="number"
+          class="w-full px-3 py-2 border rounded-md"
           placeholder={setting.placeholder}
           bind:value={settingsForm[setting.id]}
           required={setting.required}
@@ -205,7 +208,7 @@
           max={setting.validation?.max}
         />
         {#if setting.description}
-          <p class="text-xs text-muted-foreground">{setting.description}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
         {/if}
       </div>
     );
@@ -219,9 +222,9 @@
           bind:checked={settingsForm[setting.id]}
         />
         <div class="grid gap-1.5 leading-none">
-          <Label for={setting.id}>{setting.name}</Label>
+          <label for={setting.id} class="text-sm font-medium">{setting.name}</label>
           {#if setting.description}
-            <p class="text-xs text-muted-foreground">{setting.description}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
           {/if}
         </div>
       </div>
@@ -231,9 +234,10 @@
   function renderSelectInput(setting: ExtensionSetting) {
     return (
       <div class="space-y-2">
-        <Label for={setting.id}>{setting.name}</Label>
-        <Select
+        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+        <select
           id={setting.id}
+          class="w-full px-3 py-2 border rounded-md"
           bind:value={settingsForm[setting.id]}
         >
           {#if setting.options}
@@ -241,9 +245,9 @@
               <option value={option.value}>{option.label}</option>
             {/each}
           {/if}
-        </Select>
+        </select>
         {#if setting.description}
-          <p class="text-xs text-muted-foreground">{setting.description}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
         {/if}
       </div>
     );
@@ -257,7 +261,7 @@
     
     return (
       <div class="space-y-2">
-        <Label>{setting.name}</Label>
+        <label class="block text-sm font-medium">{setting.name}</label>
         {#if setting.options}
           <div class="space-y-2">
             {#each setting.options as option}
@@ -273,13 +277,13 @@
                     }
                   }}
                 />
-                <Label for={`${setting.id}-${option.value}`}>{option.label}</Label>
+                <label for={`${setting.id}-${option.value}`} class="text-sm">{option.label}</label>
               </div>
             {/each}
           </div>
         {/if}
         {#if setting.description}
-          <p class="text-xs text-muted-foreground">{setting.description}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
         {/if}
       </div>
     );
@@ -288,19 +292,27 @@
 
 <div class="space-y-4">
   {#if error}
-    <Alert variant="destructive">
-      <Info class="w-4 h-4" />
-      <AlertTitle>Error</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
-    </Alert>
+    <div class="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20 dark:border-red-400 text-red-700 dark:text-red-300">
+      <div class="flex items-start">
+        <Info class="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+        <div>
+          <h3 class="font-medium">Error</h3>
+          <p class="mt-1 text-sm">{error}</p>
+        </div>
+      </div>
+    </div>
   {/if}
   
   {#if success}
-    <Alert variant="success">
-      <Info class="w-4 h-4" />
-      <AlertTitle>Success</AlertTitle>
-      <AlertDescription>{success}</AlertDescription>
-    </Alert>
+    <div class="p-4 border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-400 text-green-700 dark:text-green-300">
+      <div class="flex items-start">
+        <Info class="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+        <div>
+          <h3 class="font-medium">Success</h3>
+          <p class="mt-1 text-sm">{success}</p>
+        </div>
+      </div>
+    </div>
   {/if}
   
   {#if extension}
@@ -315,14 +327,26 @@
           {/each}
         </div>
         
-        <div class="flex justify-end gap-2">
-          <Button variant="outline" on:click={handleCancel}>Cancel</Button>
-          <Button on:click={handleUpdateSettings}>Save Settings</Button>
+        <div class="flex justify-end gap-2 mt-6">
+          <button 
+            class="px-4 py-2 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+            on:click={handleCancel}>
+            Cancel
+          </button>
+          <button 
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-500"
+            on:click={handleUpdateSettings}>
+            Save Settings
+          </button>
         </div>
       {:else}
-        <p class="text-sm text-muted-foreground">This extension has no configurable settings.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">This extension has no configurable settings.</p>
         <div class="flex justify-end">
-          <Button variant="outline" on:click={handleCancel}>Back</Button>
+          <button 
+            class="px-4 py-2 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+            on:click={handleCancel}>
+            Back
+          </button>
         </div>
       {/if}
     </div>
@@ -332,14 +356,15 @@
       <h2 class="text-lg font-semibold">Install Extension</h2>
       
       <div class="space-y-2">
-        <Label for="extension-file">Extension File (ZIP)</Label>
-        <Input 
+        <label for="extension-file" class="block text-sm font-medium">Extension File (ZIP)</label>
+        <input 
           id="extension-file" 
           type="file" 
           accept=".zip"
           on:change={handleFileChange} 
+          class="w-full px-3 py-2 border rounded-md"
         />
-        <p class="text-xs text-muted-foreground">
+        <p class="text-xs text-gray-500 dark:text-gray-400">
           Upload a ZIP file containing the extension. The ZIP must include a valid manifest.json file.
         </p>
       </div>
@@ -347,38 +372,44 @@
       {#if manifest}
         <div class="border rounded-md p-4 space-y-4">
           <h3 class="text-sm font-medium">Extension Details</h3>
-          <Alert variant="info">
-            <Info class="w-4 h-4" />
-            <AlertTitle>Enter Extension Information</AlertTitle>
-            <AlertDescription>
-              Please provide the following extension details or verify the details if auto-detected.
-            </AlertDescription>
-          </Alert>
+          <div class="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400 text-blue-700 dark:text-blue-300">
+            <div class="flex items-start">
+              <Info class="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 class="font-medium">Enter Extension Information</h3>
+                <p class="mt-1 text-sm">
+                  Please provide the following extension details or verify the details if auto-detected.
+                </p>
+              </div>
+            </div>
+          </div>
           
           <div class="space-y-3">
             <div class="space-y-2">
-              <Label for="extension-id">Extension ID</Label>
-              <Input 
+              <label for="extension-id" class="block text-sm font-medium">Extension ID</label>
+              <input 
                 id="extension-id" 
                 placeholder="my-extension"
                 bind:value={manifest.id}
+                class="w-full px-3 py-2 border rounded-md"
               />
-              <p class="text-xs text-muted-foreground">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
                 A unique identifier for the extension (kebab-case).
               </p>
             </div>
             
             <div class="space-y-2">
-              <Label for="extension-name">Name</Label>
-              <Input 
+              <label for="extension-name" class="block text-sm font-medium">Name</label>
+              <input 
                 id="extension-name" 
                 placeholder="My Extension"
                 bind:value={manifest.name}
+                class="w-full px-3 py-2 border rounded-md"
               />
             </div>
             
             <div class="space-y-2">
-              <Label for="extension-description">Description</Label>
+              <label for="extension-description" class="block text-sm font-medium">Description</label>
               <Textarea 
                 id="extension-description" 
                 placeholder="A description of what your extension does"
@@ -387,38 +418,43 @@
             </div>
             
             <div class="space-y-2">
-              <Label for="extension-author">Author</Label>
-              <Input 
+              <label for="extension-author" class="block text-sm font-medium">Author</label>
+              <input 
                 id="extension-author" 
                 placeholder="Your Name"
                 bind:value={manifest.author}
+                class="w-full px-3 py-2 border rounded-md"
               />
             </div>
             
             <div class="space-y-2">
-              <Label for="extension-type">Type</Label>
-              <Select id="extension-type" bind:value={manifest.type}>
+              <label for="extension-type" class="block text-sm font-medium">Type</label>
+              <select id="extension-type" bind:value={manifest.type} class="w-full px-3 py-2 border rounded-md">
                 <option value="ui">UI</option>
                 <option value="api">API</option>
                 <option value="model-adapter">Model Adapter</option>
                 <option value="tool">Tool</option>
                 <option value="theme">Theme</option>
-              </Select>
+              </select>
             </div>
           </div>
         </div>
       {/if}
       
-      <div class="flex justify-end gap-2">
-        <Button variant="outline" on:click={handleCancel}>Cancel</Button>
-        <Button 
+      <div class="flex justify-end gap-2 mt-6">
+        <button 
+          class="px-4 py-2 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+          on:click={handleCancel}>
+          Cancel
+        </button>
+        <button 
           on:click={handleInstall} 
           disabled={!manifest || isInstalling || !manifest.id || !manifest.name || !manifest.author}
-          class="flex items-center gap-2"
+          class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          <Upload class="w-4 h-4" />
+          <CloudArrowUp class="w-4 h-4" />
           {isInstalling ? 'Installing...' : 'Install Extension'}
-        </Button>
+        </button>
       </div>
     </div>
   {/if}

@@ -6,7 +6,7 @@
   import { createEventDispatcher } from 'svelte';
   import type { Extension } from '../../framework/types';
   import { enableExtension, disableExtension, uninstallExtension } from '../../api/registry';
-  import { Button, Switch, Popover, PopoverContent, PopoverTrigger } from '$lib/components/ui';
+  import Switch from '$lib/components/common/Switch.svelte';
   import Info from '$lib/components/icons/Info.svelte';
   import Gear from '$lib/components/icons/Gear.svelte';
   import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
@@ -83,7 +83,6 @@
       <Switch
         checked={extension.enabled}
         on:change={handleToggle}
-        size="sm"
       />
     </div>
   </div>
@@ -101,41 +100,29 @@
     
     <div class="flex items-center gap-2">
       {#if showSettings}
-        <Button variant="ghost" size="icon-xs" on:click={openSettings}>
+        <button class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800" on:click={openSettings}>
           <Gear class="w-4 h-4" />
-        </Button>
+        </button>
       {/if}
       
       {#if extension.manifest.homepage}
-        <Button variant="ghost" size="icon-xs" as="a" href={extension.manifest.homepage} target="_blank">
+        <a href={extension.manifest.homepage} 
+           class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+           target="_blank" 
+           rel="noopener noreferrer">
           <Link class="w-4 h-4" />
-        </Button>
+        </a>
       {/if}
       
-      <Popover>
-        <PopoverTrigger asChild let:builder>
-          <Button variant="ghost" size="icon-xs" use={[builder]}>
-            <GarbageBin class="w-4 h-4 text-destructive" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent class="w-80 p-4">
-          <div class="space-y-4">
-            <div class="flex items-start gap-2">
-              <Info class="w-4 h-4 text-destructive shrink-0 mt-1" />
-              <div>
-                <h4 class="text-sm font-medium">Uninstall Extension</h4>
-                <p class="text-xs text-muted-foreground mt-1">
-                  Are you sure you want to uninstall "{extension.manifest.name}"? This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div class="flex justify-end gap-2">
-              <Button variant="outline" size="sm" data-close>Cancel</Button>
-              <Button variant="destructive" size="sm" on:click={handleUninstall}>Uninstall</Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <button 
+        class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800" 
+        on:click={() => {
+          if (confirm(`Are you sure you want to uninstall "${extension.manifest.name}"? This action cannot be undone.`)) {
+            handleUninstall();
+          }
+        }}>
+        <GarbageBin class="w-4 h-4 text-red-500" />
+      </button>
     </div>
   </div>
 </div>
