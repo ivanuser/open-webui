@@ -28,14 +28,25 @@
 		if (selectedMCPServer) {
 			const server = $mcpServers?.find(s => s.id === selectedMCPServer);
 			if (server?.status === 'connected') {
-				// Only update if it doesn't already contain MCP instructions
-				if (!params.system || !params.system.includes('MCP server')) {
-					const mcpSystemInstructions = getMCPSystemInstructions(server);
-					// Only append if there are instructions to add
-					if (mcpSystemInstructions) {
-						const currentPrompt = params.system || '';
-						// Only add if it's not already there
-						if (!currentPrompt.includes(mcpSystemInstructions)) {
+				// Generate MCP system instructions
+				const mcpSystemInstructions = getMCPSystemInstructions(server);
+				
+				// Check if we need to update the system prompt
+				if (mcpSystemInstructions) {
+					// Get current system prompt
+					const currentPrompt = params.system || '';
+					
+					// Check if the system prompt already contains MCP instructions
+					if (!currentPrompt.includes('MCP server')) {
+						// Update system prompt with MCP instructions
+						params.system = currentPrompt + (currentPrompt ? '\n\n' : '') + mcpSystemInstructions;
+					} else {
+						// Replace existing MCP instructions
+						const mcpInstructionPattern = /You have access to.*?(?=\n\n|$)/s;
+						if (mcpInstructionPattern.test(currentPrompt)) {
+							params.system = currentPrompt.replace(mcpInstructionPattern, mcpSystemInstructions);
+						} else {
+							// Just append if we can't find the pattern
 							params.system = currentPrompt + (currentPrompt ? '\n\n' : '') + mcpSystemInstructions;
 						}
 					}
@@ -50,19 +61,42 @@
 		
 		let instructions = '';
 		
-		if (server.type === 'filesystem') {
-			const allowedPath = server.args?.[server.args.length - 1] || '/home';
-			instructions = `You have access to a file system through the MCP filesystem server. You can perform the following operations:
-1. READ files by accessing their path
-2. LIST directories to see their contents
-3. CREATE new files by writing content to a path
-4. WRITE to existing files to modify their content
+		if (server.type === 'filesystem' || server.type === 'filesystem-py') {
+			// Get the allowed path from the server args
+			const allowedPath = server.args?.[server.args.length - 1] || 'C:\\Users\\ihoner\\Documents';
+			// Normalize path for Windows
+			const normalizedPath = allowedPath.replace(/\//g, '\\');
+			
+			instructions = `You have access to a file system through the MCP filesystem server. When the user asks about files or directories, ALWAYS use the MCP tools described below.
 
-When the user asks you to access, create, or modify files or directories, use the MCP filesystem server capabilities. The allowed path is ${allowedPath}. 
+IMPORTANT:
+1. You must ONLY access files within: ${normalizedPath}
+2. All paths must be ABSOLUTE, starting with ${normalizedPath}
+3. ALWAYS USE \\ (BACKSLASH) for Windows paths
 
-For example, if asked to create a file at ${allowedPath}/example.txt, you should create that file. If asked to list files in ${allowedPath}, you should list those files. Always use these capabilities when users mention files or directories.`;
+Available MCP tools:
+- list_directory(path): Lists files and folders in a directory
+- read_file(path): Reads the content of a text file
+- write_file(path, content): Creates or overwrites a file
+- create_directory(path): Creates a new directory
+- search_files(path, pattern): Finds files matching a pattern
+- get_file_info(path): Gets metadata about a file
+
+Examples:
+- To list files in ${normalizedPath}: Use list_directory with path="${normalizedPath}"
+- To read a file: Use read_file with path="${normalizedPath}\\example.txt"
+- To create a file: Use write_file with path="${normalizedPath}\\newfile.txt"
+
+When a user asks about files, directories, or performing file operations - even if they don't explicitly mention MCP - you MUST use these tools rather than guessing or making up responses. DO NOT make up file contents or directory listings.`;
 		} else if (server.type === 'memory') {
-			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities. This allows you to store information persistently and recall it in future conversations, even after the current session ends.`;
+			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities. This allows you to store information persistently and recall it in future conversations, even after the current session ends.
+
+Please use the memory server for:
+- Storing important information the user wants to save
+- Recalling previously stored information
+- Building on knowledge across multiple conversations
+
+When using the memory server, be explicit about what you're storing or retrieving.`;
 		} else {
 			instructions = `You have access to additional capabilities through the connected MCP server of type ${server.type}. When the user asks you to use these capabilities, utilize the MCP server. Follow the user's instructions regarding the MCP server carefully.`;
 		}
@@ -195,7 +229,7 @@ For example, if asked to create a file at ${allowedPath}/example.txt, you should
 					<textarea
 						bind:value={params.system}
 						class="w-full text-sm py-2 px-3 border border-gray-200 dark:border-gray-700 rounded-md bg-transparent outline-hidden resize-none"
-						rows="4"
+						rows="8"
 						placeholder={$i18n.t('Enter system prompt')}
 					/>
 				</div>
