@@ -6,7 +6,8 @@
   import { page } from '$app/stores';
   import { ExtensionManager } from '$lib/extensions/manager';
   import { Button } from '$lib/components/ui';
-  import { ArrowLeft, BookOpen } from 'lucide-svelte';
+  import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
+  import BookOpen from '$lib/components/icons/BookOpen.svelte';
 </script>
 
 <svelte:head>

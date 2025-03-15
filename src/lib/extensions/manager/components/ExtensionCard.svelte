@@ -7,7 +7,10 @@
   import type { Extension } from '../../framework/types';
   import { enableExtension, disableExtension, uninstallExtension } from '../../api/registry';
   import { Button, Switch, Popover, PopoverContent, PopoverTrigger } from '$lib/components/ui';
-  import { AlertCircle, Settings, Trash2, ExternalLink } from 'lucide-svelte';
+  import Info from '$lib/components/icons/Info.svelte';
+  import Gear from '$lib/components/icons/Gear.svelte';
+  import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
+  import Link from '$lib/components/icons/Link.svelte';
   
   // Props
   export let extension: Extension;
@@ -99,26 +102,26 @@
     <div class="flex items-center gap-2">
       {#if showSettings}
         <Button variant="ghost" size="icon-xs" on:click={openSettings}>
-          <Settings class="w-4 h-4" />
+          <Gear class="w-4 h-4" />
         </Button>
       {/if}
       
       {#if extension.manifest.homepage}
         <Button variant="ghost" size="icon-xs" as="a" href={extension.manifest.homepage} target="_blank">
-          <ExternalLink class="w-4 h-4" />
+          <Link class="w-4 h-4" />
         </Button>
       {/if}
       
       <Popover>
         <PopoverTrigger asChild let:builder>
           <Button variant="ghost" size="icon-xs" use={[builder]}>
-            <Trash2 class="w-4 h-4 text-destructive" />
+            <GarbageBin class="w-4 h-4 text-destructive" />
           </Button>
         </PopoverTrigger>
         <PopoverContent class="w-80 p-4">
           <div class="space-y-4">
             <div class="flex items-start gap-2">
-              <AlertCircle class="w-4 h-4 text-destructive shrink-0 mt-1" />
+              <Info class="w-4 h-4 text-destructive shrink-0 mt-1" />
               <div>
                 <h4 class="text-sm font-medium">Uninstall Extension</h4>
                 <p class="text-xs text-muted-foreground mt-1">

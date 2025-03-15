@@ -5,7 +5,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { Button, Alert, AlertTitle, AlertDescription, Input, Textarea, Label, Select, Checkbox } from '$lib/components/ui';
-  import { Upload, AlertCircle } from 'lucide-svelte';
+  import Upload from '$lib/components/icons/CloudArrowUp.svelte';
+  import Info from '$lib/components/icons/Info.svelte';
   import type { Extension, ExtensionManifest, ExtensionSetting } from '../../framework/types';
   import { installExtension, updateExtensionSettings } from '../../api/registry';
   import JSZip from 'jszip';
@@ -274,7 +275,7 @@
 <div class="space-y-4">
   {#if error}
     <Alert variant="destructive">
-      <AlertCircle class="w-4 h-4" />
+      <Info class="w-4 h-4" />
       <AlertTitle>Error</AlertTitle>
       <AlertDescription>{error}</AlertDescription>
     </Alert>
@@ -282,7 +283,7 @@
   
   {#if success}
     <Alert variant="success">
-      <AlertCircle class="w-4 h-4" />
+      <Info class="w-4 h-4" />
       <AlertTitle>Success</AlertTitle>
       <AlertDescription>{success}</AlertDescription>
     </Alert>

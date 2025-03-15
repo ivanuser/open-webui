@@ -13,7 +13,10 @@
   import ExtensionCard from './ExtensionCard.svelte';
   import ExtensionForm from './ExtensionForm.svelte';
   import { Button, Input, Alert, AlertTitle, AlertDescription, Tabs, TabsList, TabsTrigger, TabsContent } from '$lib/components/ui';
-  import { Search, Plus, Loader2, AlertCircle } from 'lucide-svelte';
+  import Search from '$lib/components/icons/Search.svelte';
+  import Plus from '$lib/components/icons/Plus.svelte';
+  import ArrowPath from '$lib/components/icons/ArrowPath.svelte';
+  import Info from '$lib/components/icons/Info.svelte';
   import type { Extension, ExtensionType } from '../../framework/types';
   
   // State
@@ -141,7 +144,7 @@
       
       {#if $extensionsLoading}
         <div class="flex flex-col items-center justify-center py-8">
-          <Loader2 class="w-8 h-8 animate-spin text-muted-foreground" />
+          <ArrowPath class="w-8 h-8 animate-spin text-muted-foreground" />
           <p class="mt-2 text-sm text-muted-foreground">Loading extensions...</p>
         </div>
       {:else if $extensions.size === 0}
@@ -182,7 +185,7 @@
       {#if $extensionErrors.size > 0}
         <div class="mt-4">
           <Alert variant="destructive">
-            <AlertCircle class="w-4 h-4" />
+            <Info class="w-4 h-4" />
             <AlertTitle>Extension Errors</AlertTitle>
             <AlertDescription>
               <ul class="list-disc pl-5 mt-2 space-y-1">
