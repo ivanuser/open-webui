@@ -9,7 +9,6 @@
   import Info from '$lib/components/icons/Info.svelte';
   import type { Extension, ExtensionManifest, ExtensionSetting } from '../../framework/types';
   import { installExtension, updateExtensionSettings } from '../../api/registry';
-  import JSZip from 'jszip';
   import { validateManifest, loadManifest } from '../../framework/utils';
   
   // Props
@@ -49,25 +48,24 @@
         manifest = null;
         error = null;
         
-        // Read the zip file
-        const zip = await JSZip.loadAsync(file);
-        
-        // Look for manifest.json
-        const manifestFile = zip.file('manifest.json');
-        
-        if (!manifestFile) {
-          error = 'Invalid extension: manifest.json not found in the ZIP file';
+        // For browser-side validation, we'll just verify the file is a zip
+        // and let the server handle the actual extraction and validation
+        if (!file.name.endsWith('.zip')) {
+          error = 'Invalid file type. Please upload a ZIP file.';
           return;
         }
         
-        // Read and parse the manifest
-        const manifestContent = await manifestFile.async('string');
-        manifest = loadManifest(manifestContent);
-        
-        if (!manifest) {
-          error = 'Invalid extension manifest';
-          return;
-        }
+        // Ask the user to manually specify manifest info
+        // or we could extract it on the server
+        manifest = {
+          id: '',
+          name: '',
+          version: '1.0.0',
+          description: 'Extension description',
+          author: '',
+          type: 'ui',
+          main: 'index.js'
+        };
       } catch (err) {
         error = `Failed to read extension file: ${err instanceof Error ? err.message : String(err)}`;
         console.error('Error reading extension file:', err);
@@ -75,9 +73,25 @@
     }
   }
   
+  function updateManifestField(field: string, value: any) {
+    if (manifest) {
+      manifest = {
+        ...manifest,
+        [field]: value
+      };
+    }
+  }
+  
   async function handleInstall() {
     if (!file || !manifest) {
       error = 'Please select a valid extension file';
+      return;
+    }
+    
+    // Validate manifest
+    const errors = validateManifest(manifest);
+    if (errors.length > 0) {
+      error = `Invalid manifest: ${errors.join(', ')}`;
       return;
     }
     
@@ -331,23 +345,66 @@
       </div>
       
       {#if manifest}
-        <div class="border rounded-md p-4 space-y-2">
+        <div class="border rounded-md p-4 space-y-4">
           <h3 class="text-sm font-medium">Extension Details</h3>
-          <div class="grid grid-cols-2 gap-2 text-sm">
-            <div class="text-muted-foreground">Name:</div>
-            <div>{manifest.name}</div>
+          <Alert variant="info">
+            <Info class="w-4 h-4" />
+            <AlertTitle>Enter Extension Information</AlertTitle>
+            <AlertDescription>
+              Please provide the following extension details or verify the details if auto-detected.
+            </AlertDescription>
+          </Alert>
+          
+          <div class="space-y-3">
+            <div class="space-y-2">
+              <Label for="extension-id">Extension ID</Label>
+              <Input 
+                id="extension-id" 
+                placeholder="my-extension"
+                bind:value={manifest.id}
+              />
+              <p class="text-xs text-muted-foreground">
+                A unique identifier for the extension (kebab-case).
+              </p>
+            </div>
             
-            <div class="text-muted-foreground">Version:</div>
-            <div>{manifest.version}</div>
+            <div class="space-y-2">
+              <Label for="extension-name">Name</Label>
+              <Input 
+                id="extension-name" 
+                placeholder="My Extension"
+                bind:value={manifest.name}
+              />
+            </div>
             
-            <div class="text-muted-foreground">Author:</div>
-            <div>{manifest.author}</div>
+            <div class="space-y-2">
+              <Label for="extension-description">Description</Label>
+              <Textarea 
+                id="extension-description" 
+                placeholder="A description of what your extension does"
+                bind:value={manifest.description}
+              />
+            </div>
             
-            <div class="text-muted-foreground">Description:</div>
-            <div>{manifest.description}</div>
+            <div class="space-y-2">
+              <Label for="extension-author">Author</Label>
+              <Input 
+                id="extension-author" 
+                placeholder="Your Name"
+                bind:value={manifest.author}
+              />
+            </div>
             
-            <div class="text-muted-foreground">Type:</div>
-            <div>{Array.isArray(manifest.type) ? manifest.type.join(', ') : manifest.type}</div>
+            <div class="space-y-2">
+              <Label for="extension-type">Type</Label>
+              <Select id="extension-type" bind:value={manifest.type}>
+                <option value="ui">UI</option>
+                <option value="api">API</option>
+                <option value="model-adapter">Model Adapter</option>
+                <option value="tool">Tool</option>
+                <option value="theme">Theme</option>
+              </Select>
+            </div>
           </div>
         </div>
       {/if}
@@ -356,7 +413,7 @@
         <Button variant="outline" on:click={handleCancel}>Cancel</Button>
         <Button 
           on:click={handleInstall} 
-          disabled={!manifest || isInstalling}
+          disabled={!manifest || isInstalling || !manifest.id || !manifest.name || !manifest.author}
           class="flex items-center gap-2"
         >
           <Upload class="w-4 h-4" />

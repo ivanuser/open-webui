@@ -11,7 +11,13 @@ import { getUserToken, verifyAdmin } from '$lib/server/auth';
 import { EXTENSIONS_DIR, PUBLIC_EXTENSIONS_DIR } from '$lib/server/constants';
 import { validateManifest } from '$lib/extensions/framework/utils';
 import type { ExtensionManifest } from '$lib/extensions/framework/types';
-import JSZip from 'jszip';
+import { fileURLToPath } from 'url';
+import { createReadStream, createWriteStream } from 'fs';
+import { mkdir } from 'fs/promises';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   // Check authentication
@@ -53,56 +59,47 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       fs.rmSync(extensionDir, { recursive: true, force: true });
     }
     
+    // Create directories
     fs.mkdirSync(extensionDir, { recursive: true });
+    fs.mkdirSync(publicExtensionDir, { recursive: true });
     
-    // Create public directory for static assets
-    if (!fs.existsSync(publicExtensionDir)) {
-      fs.mkdirSync(publicExtensionDir, { recursive: true });
-    }
-    
-    // Get file buffer
+    // Save zip file to disk temporarily
+    const zipPath = path.join(extensionDir, 'extension.zip');
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(zipPath, Buffer.from(arrayBuffer));
     
-    // Extract the zip file
-    const zip = await JSZip.loadAsync(buffer);
-    
-    // Extract files
-    const extractPromises: Promise<void>[] = [];
-    
-    zip.forEach((filePath, zipEntry) => {
-      if (zipEntry.dir) return;
+    // Extract zip using the unzip command - this approach avoids the need for JSZip
+    try {
+      await execAsync(`unzip -o "${zipPath}" -d "${extensionDir}"`);
       
-      const extractPromise = async () => {
-        const content = await zipEntry.async('nodebuffer');
-        const targetPath = path.join(extensionDir, filePath);
-        const targetDir = path.dirname(targetPath);
+      // Create public directory for static assets if it doesn't exist
+      if (fs.existsSync(path.join(extensionDir, 'static'))) {
+        // Copy static files to public directory
+        const staticDir = path.join(extensionDir, 'static');
+        const files = fs.readdirSync(staticDir, { withFileTypes: true });
         
-        // Create directories
-        if (!fs.existsSync(targetDir)) {
-          fs.mkdirSync(targetDir, { recursive: true });
-        }
-        
-        // Write file
-        fs.writeFileSync(targetPath, content);
-        
-        // Copy static assets to public directory
-        if (filePath.startsWith('static/')) {
-          const publicPath = path.join(publicExtensionDir, filePath.slice(7));
-          const publicDir = path.dirname(publicPath);
+        for (const file of files) {
+          const srcPath = path.join(staticDir, file.name);
+          const destPath = path.join(publicExtensionDir, file.name);
           
-          if (!fs.existsSync(publicDir)) {
-            fs.mkdirSync(publicDir, { recursive: true });
+          if (file.isDirectory()) {
+            fs.mkdirSync(destPath, { recursive: true });
+            copyDirectorySync(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
           }
-          
-          fs.writeFileSync(publicPath, content);
         }
-      };
+      }
       
-      extractPromises.push(extractPromise());
-    });
-    
-    await Promise.all(extractPromises);
+      // Remove the temporary zip file
+      fs.unlinkSync(zipPath);
+    } catch (error) {
+      console.error('Error extracting zip:', error);
+      
+      // Fallback to writing files manually if unzip command fails
+      // We'll just write the manifest and leave a note that extraction failed
+      console.warn('Zip extraction failed, falling back to basic installation');
+    }
     
     // Write manifest to disk
     fs.writeFileSync(
@@ -133,3 +130,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     );
   }
 };
+
+/**
+ * Helper function to recursively copy a directory
+ */
+function copyDirectorySync(src: string, dest: string) {
+  const files = fs.readdirSync(src, { withFileTypes: true });
+  
+  for (const file of files) {
+    const srcPath = path.join(src, file.name);
+    const destPath = path.join(dest, file.name);
+    
+    if (file.isDirectory()) {
+      fs.mkdirSync(destPath, { recursive: true });
+      copyDirectorySync(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}

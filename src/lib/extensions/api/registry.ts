@@ -257,7 +257,7 @@ export async function installExtension(manifest: ExtensionManifest, fileData: Ar
     // Create FormData with the extension zip file and manifest
     const formData = new FormData();
     formData.append('manifest', JSON.stringify(manifest));
-    formData.append('file', new Blob([fileData]), 'extension.zip');
+    formData.append('file', new Blob([fileData], { type: 'application/zip' }), 'extension.zip');
     
     const response = await fetch('/api/extensions/install', {
       method: 'POST',
@@ -265,7 +265,8 @@ export async function installExtension(manifest: ExtensionManifest, fileData: Ar
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to install extension: ${response.statusText}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Failed to install extension: ${response.statusText}`);
     }
     
     // Refresh the extensions list
@@ -274,7 +275,7 @@ export async function installExtension(manifest: ExtensionManifest, fileData: Ar
     return true;
   } catch (error) {
     console.error('Error installing extension:', error);
-    return false;
+    throw error;
   }
 }
 

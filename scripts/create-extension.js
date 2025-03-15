@@ -10,6 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { exec } = require('child_process');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -531,17 +532,30 @@ const createExtension = async () => {
     }
 
     console.log(`\nExtension created successfully in ${extensionDir}`);
-    console.log('\nNext steps:');
-    console.log('1. Add your extension code');
-    console.log('2. Add static assets (if any) in the static directory');
-    if (answers.type === 'ui') {
-      console.log('3. Add UI components in the components directory');
-    }
-    console.log('4. Package the extension as a ZIP file');
-    console.log('5. Install the extension in Open WebUI');
+    
+    // Create a ZIP file
+    const zipCommand = process.platform === 'win32'
+      ? `powershell Compress-Archive -Path "${extensionDir}\\*" -DestinationPath "${extensionDir}.zip" -Force`
+      : `cd "${extensionDir}" && zip -r "../${answers.id}.zip" .`;
+    
+    console.log('\nCreating ZIP file...');
+    
+    exec(zipCommand, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error creating ZIP file: ${error.message}`);
+        console.log('\nPlease manually zip the extension directory to install it in Open WebUI.');
+      } else {
+        console.log(`ZIP file created successfully: ${answers.id}.zip`);
+      }
+      
+      console.log('\nNext steps:');
+      console.log('1. Review and modify the extension code as needed');
+      console.log('2. Install the extension in Open WebUI using the Extensions Manager');
+      
+      rl.close();
+    });
   } catch (error) {
     console.error('Error creating extension:', error);
-  } finally {
     rl.close();
   }
 };
