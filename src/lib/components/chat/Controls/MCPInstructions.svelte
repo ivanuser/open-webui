@@ -40,7 +40,7 @@
     
     <p class="text-blue-800 dark:text-blue-300 mb-2">
       {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
-        {$i18n.t('This MCP server gives you filesystem access to the directory')} <strong>{examplePath}</strong>. {$i18n.t('To access files or directories, the AI must use the filesystem server tools with EXACT paths.')}
+        {$i18n.t('This MCP server gives you filesystem access to the directory')} <strong>{examplePath}</strong>. {$i18n.t('To access files or directories, tell the AI to make MCP tool calls.')}
       {:else if serverType === 'memory'}
         {$i18n.t('This MCP server provides persistent memory capabilities. To use it in your conversation, tell the model explicitly to use the MCP server.')}
       {:else}
@@ -52,9 +52,10 @@
       <strong>{$i18n.t('Example prompts')}:</strong>
       <div class="mt-1 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
         {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
-          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, please list the directory {directory}', { directory: examplePath })}</div>
-          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, read the file {file}', { file: exampleFilePath })}</div>
-          <div>• {$i18n.t('Using the MCP filesystem server, create a file named {file} with this content: {content}', { file: exampleNewFilePath, content: "Hello world" })}</div>
+          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, list the directory {directory}', { directory: examplePath })}</div>
+          <div class="mb-1">• {$i18n.t('Make a list_directory tool call to show me the files in {directory}', { directory: examplePath })}</div>
+          <div class="mb-1">• {$i18n.t('Use the read_file tool to show me the contents of {file}', { file: exampleFilePath })}</div>
+          <div>• {$i18n.t('Create a new file at {file} with the content "Hello world"', { file: exampleNewFilePath })}</div>
         {:else if serverType === 'memory'}
           <div class="mb-1">• {$i18n.t('Using the MCP memory server, please remember this information: {info}', { info: $i18n.t('Important fact to remember') })}</div>
           <div>• {$i18n.t('Using the MCP memory server, recall what you know about {topic}', { topic: $i18n.t('specific topic') })}</div>
@@ -81,15 +82,18 @@
       </div>
       
       <div class="mt-2 p-2 rounded text-xs bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300">
-        <strong>{$i18n.t('Available tools')}:</strong>
+        <strong>{$i18n.t('Available MCP tool calls')}:</strong>
         <ul class="list-disc list-inside mt-1">
-          <li><code>list_directory</code> - {$i18n.t('Lists files and directories')}</li>
-          <li><code>read_file</code> - {$i18n.t('Reads file content')}</li>
-          <li><code>write_file</code> - {$i18n.t('Creates or overwrites a file')}</li>
-          <li><code>create_directory</code> - {$i18n.t('Creates a new directory')}</li>
-          <li><code>search_files</code> - {$i18n.t('Searches for files matching a pattern')}</li>
-          <li><code>get_file_info</code> - {$i18n.t('Gets detailed information about a file')}</li>
+          <li><code>list_directory(path="...")</code> - {$i18n.t('Lists files and directories')}</li>
+          <li><code>read_file(path="...")</code> - {$i18n.t('Reads file content')}</li>
+          <li><code>write_file(path="...", content="...")</code> - {$i18n.t('Creates or overwrites a file')}</li>
+          <li><code>create_directory(path="...")</code> - {$i18n.t('Creates a new directory')}</li>
+          <li><code>search_files(path="...", pattern="...")</code> - {$i18n.t('Searches for files matching a pattern')}</li>
+          <li><code>get_file_info(path="...")</code> - {$i18n.t('Gets detailed information about a file')}</li>
         </ul>
+        <div class="mt-2 font-semibold">
+          {$i18n.t('Remind the AI to MAKE ACTUAL TOOL CALLS rather than just writing code!')}
+        </div>
       </div>
     {/if}
   </div>

@@ -69,29 +69,35 @@
 			const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
 			const pathSeparator = isWindows ? '\\' : '/';
 			
-			instructions = `You have access to a file system through the MCP filesystem server. When the user asks about files or directories, ALWAYS use the MCP tools described below.
+			instructions = `You have access to a file system through the MCP filesystem server. When the user asks about files or directories, you MUST use the MCP tools.
 
-IMPORTANT:
-1. You must ONLY access files within: ${allowedPath}
-2. All paths must be ABSOLUTE, starting with ${allowedPath}
-3. ${isWindows 
-		? 'ALWAYS USE \\\\ (BACKSLASH) for Windows paths'
-		: 'ALWAYS USE / (FORWARD SLASH) for Unix/Linux paths'}
+CRITICAL INSTRUCTIONS FOR MCP FILESYSTEM TOOLS:
+1. You MUST make ACTUAL tool calls with the exact tool names below - DO NOT write pseudocode!
+2. You can only access files within: ${allowedPath}
+3. All paths must be absolute, starting with ${allowedPath}
+4. ${isWindows 
+		? 'Use BACKSLASHES (\\\\) for Windows paths'
+		: 'Use FORWARD SLASHES (/) for Unix/Linux paths'}
 
-Available MCP tools:
-- list_directory(path): Lists files and folders in a directory
-- read_file(path): Reads the content of a text file
-- write_file(path, content): Creates or overwrites a file
-- create_directory(path): Creates a new directory
-- search_files(path, pattern): Finds files matching a pattern
-- get_file_info(path): Gets metadata about a file
+AVAILABLE MCP TOOLS - USE THESE EXACT NAMES:
+- list_directory - Lists files and folders in a directory
+- read_file - Reads the content of a text file
+- write_file - Creates or overwrites a file
+- create_directory - Creates a new directory
+- search_files - Finds files matching a pattern
+- get_file_info - Gets metadata about a file
 
-Examples:
-- To list files in ${allowedPath}: Use list_directory with path="${allowedPath}"
-- To read a file: Use read_file with path="${allowedPath}${pathSeparator}example.txt"
-- To create a file: Use write_file with path="${allowedPath}${pathSeparator}newfile.txt"
+CORRECT TOOL USAGE EXAMPLES:
+1. To list a directory:
+   Make a list_directory tool call with path="${allowedPath}"
 
-When a user asks about files, directories, or performing file operations - even if they don't explicitly mention MCP - you MUST use these tools rather than guessing or making up responses. DO NOT make up file contents or directory listings.`;
+2. To read a file:
+   Make a read_file tool call with path="${allowedPath}${pathSeparator}example.txt"
+
+3. To write a file:
+   Make a write_file tool call with path="${allowedPath}${pathSeparator}newfile.txt" and content="Hello world"
+
+IMPORTANT: DO NOT just write function names or pseudocode. Make actual MCP tool calls! When the user wants to manipulate files or directories, use the MCP tools directly to perform the operations.`;
 		} else if (server.type === 'memory') {
 			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities. This allows you to store information persistently and recall it in future conversations, even after the current session ends.
 
