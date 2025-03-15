@@ -5,8 +5,6 @@
 	
 	import { createMCPServer, updateMCPServer } from '$lib/apis/mcp';
 	import Modal from '$lib/components/common/Modal.svelte';
-	import Radio from '$lib/components/common/Radio.svelte';
-	import RangeSlider from '$lib/components/common/RangeSlider.svelte';
 	
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -15,6 +13,7 @@
 	export let server = null;
 	export let isEditing = false;
 	
+	// Define server types with platform-agnostic paths
 	let serverTypes = [
 		{
 			id: 'memory',
@@ -28,14 +27,14 @@
 			name: 'Filesystem Server', 
 			description: 'File system operations with configurable access controls',
 			command: 'node',
-			args: ['mcp_filesystem_server.js', 'C:\\Users\\ihoner\\Documents'] // Using our custom implementation
+			args: ['mcp_filesystem_server.js', ''] // Empty path to be filled later
 		},
 		{
 			id: 'filesystem-py',
 			name: 'Filesystem Server (Python)', 
 			description: 'Python-based file system operations',
 			command: 'python',
-			args: ['filesystem_mcp_server.py', 'C:\\Users\\ihoner\\Documents'] // Using Python implementation
+			args: ['filesystem_mcp_server.py', ''] // Empty path to be filled later
 		}
 	];
 	
@@ -51,10 +50,12 @@
 	let selectedType = serverTypes.find(t => t.id === type) || serverTypes[0];
 	
 	// Update args when the type changes
-	$: {
+	function updateTypeSelection() {
 		if (selectedType && !isEditing) {
 			command = selectedType.command;
 			args = [...selectedType.args];
+			argsString = args.join(' ');
+			directoryPath = getDirectoryPath();
 		}
 	}
 	
@@ -75,7 +76,7 @@
 		if ((type === 'filesystem' || type === 'filesystem-py') && args.length > 0) {
 			return args[args.length - 1];
 		}
-		return 'C:\\Users\\ihoner\\Documents'; // Default path
+		return ''; // Default empty path
 	};
 	
 	const setDirectoryPath = (path) => {
@@ -226,21 +227,24 @@
 			</label>
 			<div class="grid grid-cols-1 gap-2">
 				{#each serverTypes as serverType}
-					<Radio
-						value={serverType.id}
-						bind:group={type}
-						label={serverType.name}
-						description={serverType.description}
-						on:change={() => {
-							selectedType = serverType;
-							if (!isEditing) {
-								command = serverType.command;
-								args = [...serverType.args];
-								argsString = args.join(' ');
-								directoryPath = getDirectoryPath();
-							}
-						}}
-					/>
+					<div class="flex items-start p-2 border rounded-md dark:border-gray-700 {type === serverType.id ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-300 dark:border-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}">
+						<input 
+							type="radio" 
+							name="serverType" 
+							id={serverType.id} 
+							value={serverType.id} 
+							bind:group={type} 
+							class="mt-1 mr-2"
+							on:change={() => {
+								selectedType = serverType;
+								updateTypeSelection();
+							}}
+						/>
+						<label for={serverType.id} class="flex-1 cursor-pointer">
+							<div class="font-medium">{serverType.name}</div>
+							<div class="text-sm text-gray-500 dark:text-gray-400">{serverType.description}</div>
+						</label>
+					</div>
 				{/each}
 			</div>
 		</div>
@@ -278,7 +282,7 @@
 					type="text"
 					bind:value={directoryPath}
 					class="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
-					placeholder={$i18n.t('Enter directory path (e.g. C:\\Users\\username\\Documents)')}
+					placeholder={$i18n.t('Enter directory path (e.g. /home/user/documents)')}
 				/>
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
 					{$i18n.t('Only operations within this directory will be allowed')}

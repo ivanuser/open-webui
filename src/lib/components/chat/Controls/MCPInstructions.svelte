@@ -14,10 +14,19 @@
   // Extract the directory path from server args for filesystem server
   $: directoryPath = (server?.type === 'filesystem' || server?.type === 'filesystem-py') && server?.args?.length > 0 
       ? server.args[server.args.length - 1]
-      : 'C:\\Users\\ihoner\\Documents';
+      : '';
   
-  // Normalize directory path for display (ensure backslashes)
-  $: normalizedPath = directoryPath.replace(/\//g, '\\');
+  // Determine platform by checking path format
+  $: isWindows = directoryPath.includes('\\') || directoryPath.includes(':');
+  
+  // Format example paths based on platform
+  $: examplePath = directoryPath;
+  $: exampleFilePath = isWindows 
+      ? `${directoryPath}\\example.txt` 
+      : `${directoryPath}/example.txt`;
+  $: exampleNewFilePath = isWindows
+      ? `${directoryPath}\\test.txt`
+      : `${directoryPath}/test.txt`;
 </script>
 
 {#if server && isConnected}
@@ -31,7 +40,7 @@
     
     <p class="text-blue-800 dark:text-blue-300 mb-2">
       {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
-        {$i18n.t('This MCP server gives you filesystem access to the directory')} <strong>{normalizedPath}</strong>. {$i18n.t('To access files or directories, the AI must use the filesystem server tools with EXACT paths.')}
+        {$i18n.t('This MCP server gives you filesystem access to the directory')} <strong>{examplePath}</strong>. {$i18n.t('To access files or directories, the AI must use the filesystem server tools with EXACT paths.')}
       {:else if serverType === 'memory'}
         {$i18n.t('This MCP server provides persistent memory capabilities. To use it in your conversation, tell the model explicitly to use the MCP server.')}
       {:else}
@@ -43,9 +52,9 @@
       <strong>{$i18n.t('Example prompts')}:</strong>
       <div class="mt-1 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
         {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
-          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, please list the directory {directory}', { directory: normalizedPath })}</div>
-          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, read the file {file}', { file: `${normalizedPath}\\example.txt` })}</div>
-          <div>• {$i18n.t('Using the MCP filesystem server, create a file named {file} with this content: {content}', { file: `${normalizedPath}\\test.txt`, content: "Hello world" })}</div>
+          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, please list the directory {directory}', { directory: examplePath })}</div>
+          <div class="mb-1">• {$i18n.t('Using the MCP filesystem server, read the file {file}', { file: exampleFilePath })}</div>
+          <div>• {$i18n.t('Using the MCP filesystem server, create a file named {file} with this content: {content}', { file: exampleNewFilePath, content: "Hello world" })}</div>
         {:else if serverType === 'memory'}
           <div class="mb-1">• {$i18n.t('Using the MCP memory server, please remember this information: {info}', { info: $i18n.t('Important fact to remember') })}</div>
           <div>• {$i18n.t('Using the MCP memory server, recall what you know about {topic}', { topic: $i18n.t('specific topic') })}</div>
@@ -58,8 +67,17 @@
     {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
       <div class="mt-2 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded text-xs text-yellow-800 dark:text-yellow-300">
         <strong>{$i18n.t('Important')}: </strong>
-        {$i18n.t('Always specify the full path starting with')} <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{normalizedPath}</code> 
+        {$i18n.t('Always specify the full path starting with')} <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{examplePath}</code> 
         {$i18n.t('when using filesystem operations. The server can only access this directory and its subdirectories.')}
+        {#if isWindows}
+          <div class="mt-1">
+            {$i18n.t('Use backslashes (\\) for Windows paths.')}
+          </div>
+        {:else}
+          <div class="mt-1">
+            {$i18n.t('Use forward slashes (/) for Unix/Linux paths.')}
+          </div>
+        {/if}
       </div>
       
       <div class="mt-2 p-2 rounded text-xs bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300">

@@ -63,16 +63,20 @@
 		
 		if (server.type === 'filesystem' || server.type === 'filesystem-py') {
 			// Get the allowed path from the server args
-			const allowedPath = server.args?.[server.args.length - 1] || 'C:\\Users\\ihoner\\Documents';
-			// Normalize path for Windows
-			const normalizedPath = allowedPath.replace(/\//g, '\\');
+			const allowedPath = server.args?.[server.args.length - 1] || '';
+			
+			// Determine path separator based on path format
+			const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
+			const pathSeparator = isWindows ? '\\' : '/';
 			
 			instructions = `You have access to a file system through the MCP filesystem server. When the user asks about files or directories, ALWAYS use the MCP tools described below.
 
 IMPORTANT:
-1. You must ONLY access files within: ${normalizedPath}
-2. All paths must be ABSOLUTE, starting with ${normalizedPath}
-3. ALWAYS USE \\ (BACKSLASH) for Windows paths
+1. You must ONLY access files within: ${allowedPath}
+2. All paths must be ABSOLUTE, starting with ${allowedPath}
+3. ${isWindows 
+		? 'ALWAYS USE \\\\ (BACKSLASH) for Windows paths'
+		: 'ALWAYS USE / (FORWARD SLASH) for Unix/Linux paths'}
 
 Available MCP tools:
 - list_directory(path): Lists files and folders in a directory
@@ -83,9 +87,9 @@ Available MCP tools:
 - get_file_info(path): Gets metadata about a file
 
 Examples:
-- To list files in ${normalizedPath}: Use list_directory with path="${normalizedPath}"
-- To read a file: Use read_file with path="${normalizedPath}\\example.txt"
-- To create a file: Use write_file with path="${normalizedPath}\\newfile.txt"
+- To list files in ${allowedPath}: Use list_directory with path="${allowedPath}"
+- To read a file: Use read_file with path="${allowedPath}${pathSeparator}example.txt"
+- To create a file: Use write_file with path="${allowedPath}${pathSeparator}newfile.txt"
 
 When a user asks about files, directories, or performing file operations - even if they don't explicitly mention MCP - you MUST use these tools rather than guessing or making up responses. DO NOT make up file contents or directory listings.`;
 		} else if (server.type === 'memory') {
