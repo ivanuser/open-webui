@@ -271,7 +271,7 @@
                             if (e.currentTarget.checked) {
                               settingsForm[setting.id] = [...settingsForm[setting.id], option.value];
                             } else {
-                              settingsForm[setting.id] = settingsForm[setting.id].filter((v: string) => v !== option.value);
+                              settingsForm[setting.id] = settingsForm[setting.id].filter(v => v !== option.value);
                             }
                           }}
                         />
