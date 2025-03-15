@@ -7,7 +7,8 @@
     fetchMarketplaceExtensions, 
     fetchMarketplaceCategories, 
     fetchMarketplaceFeatured,
-    installMarketplaceExtension
+    installMarketplaceExtension,
+    trackExtensionInstall
   } from '../api';
   import { EXTENSION_CATEGORIES, EXTENSION_TYPES } from '../config';
   import type { MarketplaceExtension, MarketplaceCategory } from '../api';
@@ -25,6 +26,7 @@
   let categories: MarketplaceCategory[] = [];
   let featuredExtensions: MarketplaceExtension[] = [];
   let spotlight = null;
+  let installing = false;
   
   // Filters
   let searchQuery = '';
@@ -47,6 +49,23 @@
   // Load extensions from marketplace
   async function loadExtensions() {
     extensions = await fetchMarketplaceExtensions();
+    
+    // Reset mock data - set downloads and ratings to realistic initial values
+    extensions = extensions.map(ext => ({
+      ...ext,
+      downloads: 0,
+      rating: 0
+    }));
+    
+    // Remove duplicate extensions by ID
+    const uniqueExtensions = new Map();
+    extensions.forEach(ext => {
+      if (!uniqueExtensions.has(ext.id)) {
+        uniqueExtensions.set(ext.id, ext);
+      }
+    });
+    
+    extensions = Array.from(uniqueExtensions.values());
   }
   
   // Load categories from marketplace
@@ -57,7 +76,27 @@
   // Load featured extensions from marketplace
   async function loadFeatured() {
     const featuredData = await fetchMarketplaceFeatured();
-    featuredExtensions = featuredData.featured || [];
+    if (featuredData.featured) {
+      featuredExtensions = featuredData.featured;
+      
+      // Reset mock data for featured extensions
+      featuredExtensions = featuredExtensions.map(ext => ({
+        ...ext,
+        downloads: 0,
+        rating: 0
+      }));
+      
+      // Remove duplicates
+      const uniqueFeatured = new Map();
+      featuredExtensions.forEach(ext => {
+        if (!uniqueFeatured.has(ext.id)) {
+          uniqueFeatured.set(ext.id, ext);
+        }
+      });
+      
+      featuredExtensions = Array.from(uniqueFeatured.values());
+    }
+    
     spotlight = featuredData.spotlight || null;
   }
   
@@ -122,17 +161,46 @@
   
   // Install extension
   async function installExtension(extension: MarketplaceExtension) {
+    if (installing) {
+      toast.info('Another extension is currently being installed. Please wait.');
+      return;
+    }
+    
+    installing = true;
+    
     try {
+      toast.loading(`Installing ${extension.name}...`);
+      
       const success = await installMarketplaceExtension(localStorage.token, extension.id);
       
       if (success) {
+        // Track the installation (not implemented on server yet)
+        await trackExtensionInstall(extension.id);
+        
+        toast.dismiss();
         toast.success(`Extension "${extension.name}" installed successfully`);
+        
+        // Update extension in the list - increment download count
+        const updatedExtensions = [...extensions];
+        const extensionIndex = updatedExtensions.findIndex(ext => ext.id === extension.id);
+        
+        if (extensionIndex >= 0) {
+          updatedExtensions[extensionIndex] = {
+            ...updatedExtensions[extensionIndex],
+            downloads: updatedExtensions[extensionIndex].downloads + 1
+          };
+          extensions = updatedExtensions;
+        }
       } else {
+        toast.dismiss();
         toast.error(`Failed to install extension "${extension.name}"`);
       }
     } catch (error) {
       console.error('Error installing extension:', error);
+      toast.dismiss();
       toast.error(`Error installing extension: ${error.message || 'Unknown error'}`);
+    } finally {
+      installing = false;
     }
   }
 </script>

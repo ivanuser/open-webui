@@ -3,6 +3,7 @@
  */
 
 // Base URL for the extension marketplace
+// Use raw.githubusercontent.com for direct file access
 export const MARKETPLACE_BASE_URL = 'https://raw.githubusercontent.com/ivanuser/open-webui-extension-marketplace/main';
 
 // API endpoints

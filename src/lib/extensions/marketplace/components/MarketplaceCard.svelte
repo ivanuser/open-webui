@@ -20,32 +20,6 @@
     }
   }
   
-  // Stars rating
-  function renderStars(rating: number) {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
-    
-    // Full stars
-    for (let i = 0; i < fullStars; i++) {
-      stars.push('full');
-    }
-    
-    // Half star
-    if (hasHalfStar) {
-      stars.push('half');
-    }
-    
-    // Empty stars
-    while (stars.length < 5) {
-      stars.push('empty');
-    }
-    
-    return stars;
-  }
-  
-  $: stars = renderStars(extension.rating);
-  
   // Get type badge color
   function getTypeBadgeColor(type) {
     const colors = {
@@ -112,31 +86,11 @@
     {/if}
     
     <div class="flex items-center mb-3">
-      <!-- Star Rating -->
-      <div class="flex text-yellow-400 mr-1">
-        {#each stars as star}
-          {#if star === 'full'}
-            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-            </svg>
-          {:else if star === 'half'}
-            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z" />
-              <path fill="#e5e7eb" d="M12 17.27V2l2.81 6.63L22 9.24l-5.46 4.73L18.18 21 12 17.27z" />
-            </svg>
-          {:else}
-            <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-            </svg>
-          {/if}
-        {/each}
-      </div>
-      
-      <span class="text-xs text-gray-600 dark:text-gray-400">{extension.rating.toFixed(1)}</span>
-      
-      <span class="mx-2 text-gray-300 dark:text-gray-600">•</span>
-      
-      <span class="text-xs text-gray-600 dark:text-gray-400">{extension.downloads.toLocaleString()} downloads</span>
+      {#if extension.downloads > 0}
+        <span class="text-xs text-gray-600 dark:text-gray-400">{extension.downloads.toLocaleString()} downloads</span>
+      {:else}
+        <span class="text-xs text-gray-600 dark:text-gray-400">New</span>
+      {/if}
     </div>
     
     <div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex justify-between">

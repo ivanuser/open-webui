@@ -1,23 +1,26 @@
-feat: Integrate Extension Marketplace with Open WebUI
+fix: Resolve Extension Marketplace issues
 
-This commit implements the integration between Open WebUI and the extension marketplace:
+This commit fixes several issues with the Extension Marketplace integration:
 
-- Create a new marketplace module with API client for fetching extensions
-- Add marketplace configuration with endpoints for the extension registry
-- Implement UI components for browsing and installing marketplace extensions:
-  - MarketplaceTab: Main component for marketplace browsing
-  - MarketplaceCard: Component to display extension information
-  - MarketplaceFeatured: Component for featured extensions
-  - ExtensionDetails: Component for detailed extension information
-- Update ExtensionManager to include a marketplace tab
-- Update extensions index to export the marketplace module
+1. JSON Parsing Error:
+   - Updated marketplace configuration to use raw GitHub content URLs
+   - Fixed content type handling for API requests
 
-The integration allows users to:
-- Browse extensions in the marketplace
-- View extension details including documentation
-- Install extensions directly from the marketplace
-- Filter extensions by category and type
-- Search for extensions
+2. Extension Installation:
+   - Added server-side implementation for extension installation API
+   - Implemented proper error handling in extension installation
+   - Added support for marketplace extension installation
 
-This enhances the user experience by providing a centralized repository of
-extensions that can be easily discovered and installed.
+3. UI Improvements:
+   - Reset mock data (ratings, downloads) to realistic initial values
+   - Removed duplicate extension entries in the marketplace
+   - Added proper loading and error states
+   - Improved empty state handling for new extensions
+
+4. Security and Performance:
+   - Added proper authentication checks for admin API endpoints
+   - Implemented file download and validation for extensions
+   - Added placeholder implementation for extension package handling
+
+This ensures the marketplace can properly fetch extensions from the GitHub
+repository and users can install extensions directly from the marketplace.

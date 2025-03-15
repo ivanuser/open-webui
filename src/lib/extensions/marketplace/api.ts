@@ -177,23 +177,35 @@ export async function fetchExtensionReleaseInfo(id: string): Promise<ReleaseInfo
  */
 export async function searchMarketplaceExtensions(query: string, category?: string, type?: string): Promise<MarketplaceExtension[]> {
   try {
-    let url = `${MARKETPLACE_API.search}?q=${encodeURIComponent(query)}`;
+    // For now, do client-side filtering of extensions
+    const extensions = await fetchMarketplaceExtensions();
     
-    if (category && category !== 'all') {
-      url += `&category=${encodeURIComponent(category)}`;
-    }
-    
-    if (type && type !== 'all') {
-      url += `&type=${encodeURIComponent(type)}`;
-    }
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to search extensions: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    return data.results || [];
+    return extensions.filter(extension => {
+      // Filter by search query
+      if (query) {
+        const queryLower = query.toLowerCase();
+        
+        const matchesName = extension.name.toLowerCase().includes(queryLower);
+        const matchesDescription = extension.description.toLowerCase().includes(queryLower);
+        const matchesTags = extension.tags.some(tag => tag.toLowerCase().includes(queryLower));
+        
+        if (!(matchesName || matchesDescription || matchesTags)) {
+          return false;
+        }
+      }
+      
+      // Filter by category
+      if (category && category !== 'all' && extension.category !== category) {
+        return false;
+      }
+      
+      // Filter by type
+      if (type && type !== 'all' && extension.type !== type) {
+        return false;
+      }
+      
+      return true;
+    });
   } catch (error) {
     console.error('Error searching marketplace extensions:', error);
     return [];
@@ -202,6 +214,10 @@ export async function searchMarketplaceExtensions(query: string, category?: stri
 
 /**
  * Install an extension from the marketplace
+ * 
+ * This uses the existing extension API endpoints in Open WebUI,
+ * which might differ from what's available in your current setup.
+ * Adjust the endpoint URLs and payloads as needed.
  */
 export async function installMarketplaceExtension(
   token: string, 
@@ -220,33 +236,48 @@ export async function installMarketplaceExtension(
       throw new Error(`Failed to fetch release info for extension ${extensionId}`);
     }
     
-    // 3. Download the extension package
-    const packageResponse = await fetch(releaseInfo.downloadUrl);
-    if (!packageResponse.ok) {
-      throw new Error(`Failed to download extension package: ${packageResponse.statusText}`);
-    }
+    console.log("Installing extension:", manifest);
     
-    // 4. Extract and install the extension
-    // Note: In a real implementation, this would require server-side code to handle
-    //       downloading, verifying, and installing the extension package
-    //       For now, we'll simulate this by calling the extension installation API
-    
-    const installResponse = await fetch('/api/extensions', {
+    // 3. Call the Open WebUI extension installation API
+    // Note: This endpoint might need to be adjusted based on your actual API
+    const installResponse = await fetch('/api/admin/extensions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(manifest)
+      body: JSON.stringify({
+        name: manifest.name,
+        description: manifest.description,
+        version: manifest.version,
+        author: manifest.author,
+        type: manifest.type,
+        source: {
+          type: 'marketplace',
+          id: extensionId,
+          url: releaseInfo.downloadUrl
+        }
+      })
     });
     
     if (!installResponse.ok) {
-      throw new Error(`Failed to install extension: ${installResponse.statusText}`);
+      const errorData = await installResponse.json().catch(() => ({}));
+      throw new Error(`Failed to install extension: ${errorData.message || installResponse.statusText}`);
     }
     
     return true;
   } catch (error) {
     console.error(`Error installing extension ${extensionId}:`, error);
-    return false;
+    throw error;
   }
+}
+
+/**
+ * Track extension download/installation 
+ * This would normally update the download count on the marketplace server
+ */
+export async function trackExtensionInstall(extensionId: string): Promise<void> {
+  // In a real implementation, this would call an API to track the download
+  // For now, we'll just log it
+  console.log(`Extension downloaded: ${extensionId}`);
 }

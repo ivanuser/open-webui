@@ -152,7 +152,9 @@
             
             <div>
               <span class="text-gray-500 dark:text-gray-400">Downloads:</span>
-              <span class="font-medium dark:text-white">{extension.downloads.toLocaleString()}</span>
+              <span class="font-medium dark:text-white">
+                {extension.downloads > 0 ? extension.downloads.toLocaleString() : 'New'}
+              </span>
             </div>
             
             <div>
