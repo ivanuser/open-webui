@@ -1,0 +1,44 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "A simple example extension for Open WebUI",
+  "author": "Open WebUI Team",
+  "homepage": "https://github.com/example/hello-world",
+  "repository": "https://github.com/example/hello-world",
+  "license": "MIT",
+  "type": "ui",
+  "main": "index.js",
+  "icon": "icon.png",
+  "tags": ["example", "ui"],
+  "settings": [
+    {
+      "id": "message",
+      "name": "Greeting Message",
+      "description": "The message to display in the greeting",
+      "type": "string",
+      "default": "Hello, World!",
+      "placeholder": "Enter a greeting message"
+    },
+    {
+      "id": "showTimestamp",
+      "name": "Show Timestamp",
+      "description": "Whether to show the timestamp with the greeting",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "textColor",
+      "name": "Text Color",
+      "description": "The color of the greeting text",
+      "type": "select",
+      "default": "default",
+      "options": [
+        { "value": "default", "label": "Default" },
+        { "value": "primary", "label": "Primary" },
+        { "value": "secondary", "label": "Secondary" },
+        { "value": "accent", "label": "Accent" }
+      ]
+    }
+  ]
+}

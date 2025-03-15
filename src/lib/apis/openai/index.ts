@@ -1,4 +1,7 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+import { getMCPTools, processToolCall } from '$lib/apis/mcp';
+import { mcpServers, settings } from '$lib/stores';
+import { get } from 'svelte/store';
 
 export const getOpenAIConfig = async (token: string = '') => {
 	let error = null;
@@ -329,6 +332,60 @@ export const verifyOpenAIConnection = async (
 	return res;
 };
 
+/**
+ * Check if MCP is enabled and should be included in requests
+ * @returns {boolean} True if MCP is enabled
+ */
+function isMCPEnabled() {
+    const currentSettings = get(settings);
+    const servers = get(mcpServers) || [];
+    
+    // Check if there's a default server or any connected server
+    const defaultServerId = currentSettings?.defaultMcpServer;
+    
+    if (defaultServerId) {
+        return servers.some(s => s.id === defaultServerId && s.status === 'connected');
+    }
+    
+    // If no default, check if any server is connected
+    return servers.some(s => s.status === 'connected');
+}
+
+/**
+ * Add MCP tools to the request if needed
+ * @param {object} requestData - Original request data
+ * @returns {object} Updated request data with MCP tools if needed
+ */
+function addMCPToolsToRequest(requestData: any) {
+    // Check if MCP is enabled
+    if (!isMCPEnabled()) {
+        return requestData;
+    }
+    
+    // Get MCP tools
+    const mcpTools = getMCPTools();
+    
+    if (!mcpTools || mcpTools.length === 0) {
+        return requestData;
+    }
+    
+    // Add or merge tools
+    const updatedRequest = { ...requestData };
+    
+    if (!updatedRequest.tools) {
+        updatedRequest.tools = mcpTools;
+    } else {
+        updatedRequest.tools = [...updatedRequest.tools, ...mcpTools];
+    }
+    
+    // Set tool_choice if not already set
+    if (!updatedRequest.tool_choice) {
+        updatedRequest.tool_choice = "auto";
+    }
+    
+    return updatedRequest;
+}
+
 export const chatCompletion = async (
 	token: string = '',
 	body: object,
@@ -337,6 +394,9 @@ export const chatCompletion = async (
 	const controller = new AbortController();
 	let error = null;
 
+	// Add MCP tools to the request if needed
+	const updatedBody = addMCPToolsToRequest(body);
+
 	const res = await fetch(`${url}/chat/completions`, {
 		signal: controller.signal,
 		method: 'POST',
@@ -344,7 +404,7 @@ export const chatCompletion = async (
 			Authorization: `Bearer ${token}`,
 			'Content-Type': 'application/json'
 		},
-		body: JSON.stringify(body)
+		body: JSON.stringify(updatedBody)
 	}).catch((err) => {
 		console.log(err);
 		error = err;
@@ -365,13 +425,16 @@ export const generateOpenAIChatCompletion = async (
 ) => {
 	let error = null;
 
+	// Add MCP tools to the request if needed
+	const updatedBody = addMCPToolsToRequest(body);
+
 	const res = await fetch(`${url}/chat/completions`, {
 		method: 'POST',
 		headers: {
 			Authorization: `Bearer ${token}`,
 			'Content-Type': 'application/json'
 		},
-		body: JSON.stringify(body)
+		body: JSON.stringify(updatedBody)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
@@ -384,6 +447,17 @@ export const generateOpenAIChatCompletion = async (
 
 	if (error) {
 		throw error;
+	}
+
+	// Process any tool calls in the response
+	if (res && res.choices && res.choices[0]?.message?.tool_calls) {
+		try {
+			// Handle tool calls (in a real implementation)
+			console.log("Tool calls detected", res.choices[0].message.tool_calls);
+			// We would process tool calls here, but for now just log them
+		} catch (err) {
+			console.error("Error processing tool calls", err);
+		}
 	}
 
 	return res;

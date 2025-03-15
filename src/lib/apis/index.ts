@@ -1,5 +1,5 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-import { getOpenAIModelsDirect } from './openai';
+import { getOpenAIModelsDirect } from './openai/index.ts';
 
 export const getModels = async (
 	token: string = '',
@@ -392,7 +392,7 @@ export const generateTags = async (
 		const response = res?.choices[0]?.message?.content ?? '';
 
 		// Step 2: Attempt to fix common JSON format issues like single quotes
-		const sanitizedResponse = response.replace(/['‘’`]/g, '"'); // Convert single quotes to double quotes for valid JSON
+		const sanitizedResponse = response.replace(/['''`]/g, '"'); // Convert single quotes to double quotes for valid JSON
 
 		// Step 3: Find the relevant JSON block within the response
 		const jsonStartIndex = sanitizedResponse.indexOf('{');
