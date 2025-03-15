@@ -1,0 +1,23 @@
+feat: Implement Extension System Architecture
+
+This commit implements a comprehensive Extension System Architecture for Open WebUI:
+
+- Fix build error in `src/lib/apis/openai/index.js` by explicitly re-exporting `chatCompletion`
+- Create Extension Manager with backend and frontend components
+- Implement Extension Framework with base classes and utilities
+- Create an example extension demonstrating the system
+- Add detailed documentation for creating and managing extensions
+- Integrate with the existing extension system in Open WebUI
+
+The Extension System provides:
+- A framework for developing extensions
+- A manager for installing and configuring extensions
+- Support for UI, API, model, tool, and theme extensions
+- A hook system for extensions to integrate with Open WebUI
+- Documentation for developers and users
+
+This implementation also includes:
+- REST API endpoints for managing extensions
+- Svelte components for the admin interface
+- Installation scripts for easy deployment
+- Example extension with UI integration

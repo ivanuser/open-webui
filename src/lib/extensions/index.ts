@@ -12,13 +12,20 @@ export * from './api';
 // Export manager
 export * from './manager';
 
+// Export integration
+export * from './integration';
+
 // Initialize extensions when this module is imported
 import { browser } from '$app/environment';
 import { initializeRegistry } from './api/registry';
+import { initializeExtensionSystem } from './integration';
 
 // Initialize extensions in the browser
 if (browser) {
-  initializeRegistry().catch(err => {
+  Promise.all([
+    initializeRegistry(),
+    initializeExtensionSystem()
+  ]).catch(err => {
     console.error('Failed to initialize extension system:', err);
   });
 }

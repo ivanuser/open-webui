@@ -1,0 +1,127 @@
+/* Extension Manager Styles */
+
+.extension-manager-container {
+  padding: 1.5rem;
+}
+
+.extension-card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.extension-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-badge.enabled {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.disabled {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.status-badge.error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Dark mode overrides */
+.dark .status-badge.enabled {
+  background-color: #065f46;
+  color: #d1fae5;
+}
+
+.dark .status-badge.disabled {
+  background-color: #374151;
+  color: #e5e7eb;
+}
+
+.dark .status-badge.error {
+  background-color: #7f1d1d;
+  color: #fecaca;
+}
+
+/* Type badges */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.type-badge.ui {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.type-badge.api {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.type-badge.model {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+}
+
+.type-badge.tool {
+  background-color: #ffedd5;
+  color: #9a3412;
+}
+
+.type-badge.theme {
+  background-color: #fce7f3;
+  color: #9d174d;
+}
+
+/* Dark mode overrides for type badges */
+.dark .type-badge.ui {
+  background-color: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.dark .type-badge.api {
+  background-color: #065f46;
+  color: #d1fae5;
+}
+
+.dark .type-badge.model {
+  background-color: #581c87;
+  color: #e9d5ff;
+}
+
+.dark .type-badge.tool {
+  background-color: #7c2d12;
+  color: #fed7aa;
+}
+
+.dark .type-badge.theme {
+  background-color: #831843;
+  color: #fbcfe8;
+}
+
+/* Animation for loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
