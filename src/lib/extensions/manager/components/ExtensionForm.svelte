@@ -155,139 +155,6 @@
   function handleCancel() {
     dispatch('cancel');
   }
-  
-  // Render helper for settings
-  function renderSetting(setting: ExtensionSetting) {
-    switch (setting.type) {
-      case 'string':
-        return renderStringInput(setting);
-      case 'number':
-        return renderNumberInput(setting);
-      case 'boolean':
-        return renderBooleanInput(setting);
-      case 'select':
-        return renderSelectInput(setting);
-      case 'multiselect':
-        return renderMultiselectInput(setting);
-      default:
-        return null;
-    }
-  }
-  
-  function renderStringInput(setting: ExtensionSetting) {
-    return (
-      <div class="space-y-2">
-        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
-        <input
-          id={setting.id}
-          type="text"
-          class="w-full px-3 py-2 border rounded-md"
-          placeholder={setting.placeholder}
-          bind:value={settingsForm[setting.id]}
-          required={setting.required}
-        />
-        {#if setting.description}
-          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
-        {/if}
-      </div>
-    );
-  }
-  
-  function renderNumberInput(setting: ExtensionSetting) {
-    return (
-      <div class="space-y-2">
-        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
-        <input
-          id={setting.id}
-          type="number"
-          class="w-full px-3 py-2 border rounded-md"
-          placeholder={setting.placeholder}
-          bind:value={settingsForm[setting.id]}
-          required={setting.required}
-          min={setting.validation?.min}
-          max={setting.validation?.max}
-        />
-        {#if setting.description}
-          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
-        {/if}
-      </div>
-    );
-  }
-  
-  function renderBooleanInput(setting: ExtensionSetting) {
-    return (
-      <div class="flex items-start space-x-2">
-        <Checkbox
-          id={setting.id}
-          bind:checked={settingsForm[setting.id]}
-        />
-        <div class="grid gap-1.5 leading-none">
-          <label for={setting.id} class="text-sm font-medium">{setting.name}</label>
-          {#if setting.description}
-            <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
-          {/if}
-        </div>
-      </div>
-    );
-  }
-  
-  function renderSelectInput(setting: ExtensionSetting) {
-    return (
-      <div class="space-y-2">
-        <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
-        <select
-          id={setting.id}
-          class="w-full px-3 py-2 border rounded-md"
-          bind:value={settingsForm[setting.id]}
-        >
-          {#if setting.options}
-            {#each setting.options as option}
-              <option value={option.value}>{option.label}</option>
-            {/each}
-          {/if}
-        </select>
-        {#if setting.description}
-          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
-        {/if}
-      </div>
-    );
-  }
-  
-  function renderMultiselectInput(setting: ExtensionSetting) {
-    // Initialize as array if not already
-    if (!Array.isArray(settingsForm[setting.id])) {
-      settingsForm[setting.id] = [];
-    }
-    
-    return (
-      <div class="space-y-2">
-        <label class="block text-sm font-medium">{setting.name}</label>
-        {#if setting.options}
-          <div class="space-y-2">
-            {#each setting.options as option}
-              <div class="flex items-center space-x-2">
-                <Checkbox
-                  id={`${setting.id}-${option.value}`}
-                  checked={settingsForm[setting.id].includes(option.value)}
-                  on:change={(e) => {
-                    if (e.currentTarget.checked) {
-                      settingsForm[setting.id] = [...settingsForm[setting.id], option.value];
-                    } else {
-                      settingsForm[setting.id] = settingsForm[setting.id].filter((v: string) => v !== option.value);
-                    }
-                  }}
-                />
-                <label for={`${setting.id}-${option.value}`} class="text-sm">{option.label}</label>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        {#if setting.description}
-          <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
-        {/if}
-      </div>
-    );
-  }
 </script>
 
 <div class="space-y-4">
@@ -323,7 +190,101 @@
       {#if extension.manifest.settings && extension.manifest.settings.length > 0}
         <div class="space-y-4">
           {#each extension.manifest.settings as setting}
-            {renderSetting(setting)}
+            {#if setting.type === 'string'}
+              <div class="space-y-2">
+                <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+                <input
+                  id={setting.id}
+                  type="text"
+                  class="w-full px-3 py-2 border rounded-md"
+                  placeholder={setting.placeholder}
+                  bind:value={settingsForm[setting.id]}
+                  required={setting.required}
+                />
+                {#if setting.description}
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                {/if}
+              </div>
+            {:else if setting.type === 'number'}
+              <div class="space-y-2">
+                <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+                <input
+                  id={setting.id}
+                  type="number"
+                  class="w-full px-3 py-2 border rounded-md"
+                  placeholder={setting.placeholder}
+                  bind:value={settingsForm[setting.id]}
+                  required={setting.required}
+                  min={setting.validation?.min}
+                  max={setting.validation?.max}
+                />
+                {#if setting.description}
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                {/if}
+              </div>
+            {:else if setting.type === 'boolean'}
+              <div class="flex items-start space-x-2">
+                <Checkbox
+                  id={setting.id}
+                  bind:checked={settingsForm[setting.id]}
+                />
+                <div class="grid gap-1.5 leading-none">
+                  <label for={setting.id} class="text-sm font-medium">{setting.name}</label>
+                  {#if setting.description}
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                  {/if}
+                </div>
+              </div>
+            {:else if setting.type === 'select'}
+              <div class="space-y-2">
+                <label for={setting.id} class="block text-sm font-medium">{setting.name}</label>
+                <select
+                  id={setting.id}
+                  class="w-full px-3 py-2 border rounded-md"
+                  bind:value={settingsForm[setting.id]}
+                >
+                  {#if setting.options}
+                    {#each setting.options as option}
+                      <option value={option.value}>{option.label}</option>
+                    {/each}
+                  {/if}
+                </select>
+                {#if setting.description}
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                {/if}
+              </div>
+            {:else if setting.type === 'multiselect'}
+              <div class="space-y-2">
+                <label class="block text-sm font-medium">{setting.name}</label>
+                {#if setting.options}
+                  <div class="space-y-2">
+                    {#each setting.options as option}
+                      <div class="flex items-center space-x-2">
+                        <Checkbox
+                          id={`${setting.id}-${option.value}`}
+                          checked={settingsForm[setting.id]?.includes(option.value)}
+                          on:change={(e) => {
+                            if (!Array.isArray(settingsForm[setting.id])) {
+                              settingsForm[setting.id] = [];
+                            }
+                            
+                            if (e.currentTarget.checked) {
+                              settingsForm[setting.id] = [...settingsForm[setting.id], option.value];
+                            } else {
+                              settingsForm[setting.id] = settingsForm[setting.id].filter((v: string) => v !== option.value);
+                            }
+                          }}
+                        />
+                        <label for={`${setting.id}-${option.value}`} class="text-sm">{option.label}</label>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+                {#if setting.description}
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                {/if}
+              </div>
+            {/if}
           {/each}
         </div>
         
