@@ -2,6 +2,10 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { config, settings, mcpServers } from '$lib/stores';
 import { get } from 'svelte/store';
 import { updateUserSettings } from '$lib/apis/users';
+import { executeMCPTool } from './execute';
+
+// Export the executeMCPTool function
+export { executeMCPTool };
 
 // Helper function to get MCP servers from localStorage
 const getMCPServersFromStorage = () => {
@@ -30,8 +34,8 @@ const getMCPServersFromStorage = () => {
 			id: 'filesystem-server',
 			name: 'Filesystem Server',
 			type: 'filesystem',
-			command: 'npx',
-			args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/ihoner'],
+			command: 'node',
+			args: ['mcp_filesystem_server.js', '/home/ihoner'],
 			status: 'disconnected',
 			description: 'Secure file operations with configurable access controls'
 		}
@@ -108,6 +112,255 @@ const syncEnabledMCPServers = async (servers) => {
 		console.error('Error syncing enabled MCP servers with settings:', error);
 	}
 };
+
+/**
+ * Get the tools for the default/enabled MCP server
+ * @returns {Array} Array of tool definitions
+ */
+export function getMCPTools() {
+	const currentSettings = get(settings);
+	const defaultServerId = currentSettings?.defaultMcpServer;
+	const servers = get(mcpServers) || [];
+	
+	// Get default server if it exists and is connected
+	let server = null;
+	if (defaultServerId) {
+		server = servers.find(s => s.id === defaultServerId && s.status === 'connected');
+	}
+	
+	// If no default server, use the first connected server
+	if (!server) {
+		server = servers.find(s => s.status === 'connected');
+	}
+	
+	if (!server) {
+		return [];
+	}
+	
+	// Return tools based on server type
+	if (server.type === 'filesystem' || server.type === 'filesystem-py') {
+		return [
+			{
+				type: "function",
+				function: {
+					name: "list_directory",
+					description: "Lists all files and directories in the specified directory path",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path to the directory"
+							}
+						},
+						required: ["path"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "read_file",
+					description: "Reads the content of a file",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path to the file"
+							}
+						},
+						required: ["path"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "write_file",
+					description: "Creates a new file or overwrites an existing file",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path where the file should be created or overwritten"
+							},
+							content: {
+								type: "string",
+								description: "The content to write to the file"
+							}
+						},
+						required: ["path", "content"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "create_directory",
+					description: "Creates a new directory or ensures it exists",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path where the directory should be created"
+							}
+						},
+						required: ["path"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "search_files",
+					description: "Searches for files matching a pattern in a directory",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path to the directory to search in"
+							},
+							pattern: {
+								type: "string",
+								description: "The search pattern (glob format)"
+							}
+						},
+						required: ["path", "pattern"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "get_file_info",
+					description: "Gets detailed information about a file or directory",
+					parameters: {
+						type: "object",
+						properties: {
+							path: {
+								type: "string",
+								description: "The absolute path to the file or directory"
+							}
+						},
+						required: ["path"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "list_allowed_directories",
+					description: "Lists all directories that this server is allowed to access",
+					parameters: {
+						type: "object",
+						properties: {}
+					}
+				}
+			}
+		];
+	} else if (server.type === 'memory') {
+		return [
+			{
+				type: "function",
+				function: {
+					name: "store_memory",
+					description: "Stores information in the memory server",
+					parameters: {
+						type: "object",
+						properties: {
+							key: {
+								type: "string",
+								description: "The key to store the information under"
+							},
+							value: {
+								type: "string",
+								description: "The information to store"
+							}
+						},
+						required: ["key", "value"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "retrieve_memory",
+					description: "Retrieves information from the memory server",
+					parameters: {
+						type: "object",
+						properties: {
+							key: {
+								type: "string",
+								description: "The key to retrieve information for"
+							}
+						},
+						required: ["key"]
+					}
+				}
+			},
+			{
+				type: "function",
+				function: {
+					name: "search_memory",
+					description: "Searches for information in the memory server",
+					parameters: {
+						type: "object",
+						properties: {
+							query: {
+								type: "string",
+								description: "The search query"
+							}
+						},
+						required: ["query"]
+					}
+				}
+			}
+		];
+	}
+	
+	return [];
+}
+
+/**
+ * Process an MCP tool call
+ * @param {string} token - Authentication token
+ * @param {Object} toolCall - Tool call object
+ * @returns {Promise} Promise resolving to the tool call result
+ */
+export async function processToolCall(token, toolCall) {
+	const { name, arguments: argsString } = toolCall;
+	const args = typeof argsString === 'string' ? JSON.parse(argsString) : argsString;
+	
+	// Get the default MCP server
+	const currentSettings = get(settings);
+	const defaultServerId = currentSettings?.defaultMcpServer;
+	const servers = get(mcpServers) || [];
+	
+	let serverId = defaultServerId;
+	
+	// If no default server, use the first connected server
+	if (!serverId) {
+		const connectedServer = servers.find(s => s.status === 'connected');
+		if (connectedServer) {
+			serverId = connectedServer.id;
+		}
+	}
+	
+	if (!serverId) {
+		throw new Error('No connected MCP server available');
+	}
+	
+	// Execute the tool call
+	return await executeMCPTool(token, {
+		serverId,
+		tool: name,
+		args
+	});
+}
 
 export async function getMCPServers(token) {
 	try {

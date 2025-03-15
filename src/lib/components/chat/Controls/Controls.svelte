@@ -67,48 +67,69 @@
 			
 			// Determine path separator based on path format
 			const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
-			const pathSeparator = isWindows ? '\\' : '/';
+			const pathSep = isWindows ? '\\' : '/';
 			
-			instructions = `You have access to a file system through the MCP filesystem server. When the user asks about files or directories, you MUST use the MCP tools.
+			instructions = `You have access to filesystem tools through an MCP server. Use these tools to interact with files and directories when the user asks about them.
 
-CRITICAL INSTRUCTIONS FOR MCP FILESYSTEM TOOLS:
-1. You MUST make ACTUAL tool calls with the exact tool names below - DO NOT write pseudocode!
-2. You can only access files within: ${allowedPath}
-3. All paths must be absolute, starting with ${allowedPath}
-4. ${isWindows 
-		? 'Use BACKSLASHES (\\\\) for Windows paths'
-		: 'Use FORWARD SLASHES (/) for Unix/Linux paths'}
+You can use the following filesystem tools:
 
-AVAILABLE MCP TOOLS - USE THESE EXACT NAMES:
-- list_directory - Lists files and folders in a directory
-- read_file - Reads the content of a text file
-- write_file - Creates or overwrites a file
-- create_directory - Creates a new directory
-- search_files - Finds files matching a pattern
-- get_file_info - Gets metadata about a file
+1. list_directory - Lists files and folders in a directory
+   Usage: When you need to list directory contents
+   Parameter: path (e.g., "${allowedPath}")
 
-CORRECT TOOL USAGE EXAMPLES:
-1. To list a directory:
-   Make a list_directory tool call with path="${allowedPath}"
+2. read_file - Reads the content of a file
+   Usage: When you need to read a file's content
+   Parameter: path (e.g., "${allowedPath}${pathSep}example.txt")
 
-2. To read a file:
-   Make a read_file tool call with path="${allowedPath}${pathSeparator}example.txt"
+3. write_file - Creates or overwrites a file
+   Usage: When you need to create or modify a file
+   Parameters: path and content (e.g., path="${allowedPath}${pathSep}newfile.txt", content="Hello world")
 
-3. To write a file:
-   Make a write_file tool call with path="${allowedPath}${pathSeparator}newfile.txt" and content="Hello world"
+4. create_directory - Creates a new directory
+   Usage: When you need to create a folder
+   Parameter: path (e.g., "${allowedPath}${pathSep}newfolder")
 
-IMPORTANT: DO NOT just write function names or pseudocode. Make actual MCP tool calls! When the user wants to manipulate files or directories, use the MCP tools directly to perform the operations.`;
+5. search_files - Searches for files matching a pattern
+   Usage: When you need to find files
+   Parameters: path and pattern (e.g., path="${allowedPath}", pattern="*.txt")
+
+6. get_file_info - Gets file metadata
+   Usage: When you need details about a file
+   Parameter: path (e.g., "${allowedPath}${pathSep}example.txt")
+
+IMPORTANT:
+- Only access files under: ${allowedPath}
+- Always use ${isWindows ? 'backslashes' : 'forward slashes'} in paths
+- Use absolute paths starting with ${allowedPath}
+- Use these tools directly when asked about files or directories, even if not explicitly mentioned
+
+When a user asks about files or directories, ALWAYS try to use these tools instead of making assumptions.`;
+		
 		} else if (server.type === 'memory') {
-			instructions = `You have access to a persistent memory system through the MCP memory server. When the user asks you to remember information or retrieve previously stored knowledge, use the MCP memory server capabilities. This allows you to store information persistently and recall it in future conversations, even after the current session ends.
+			instructions = `You have access to a persistent memory system through an MCP server. This allows you to store and retrieve information across conversations.
 
-Please use the memory server for:
-- Storing important information the user wants to save
-- Recalling previously stored information
-- Building on knowledge across multiple conversations
+You can use the following memory tools:
 
-When using the memory server, be explicit about what you're storing or retrieving.`;
+1. store_memory - Stores information for later retrieval
+   Usage: When the user asks you to remember something
+   Parameters: key and value
+
+2. retrieve_memory - Retrieves previously stored information
+   Usage: When you need to recall stored information
+   Parameter: key
+
+3. search_memory - Searches across all stored memories
+   Usage: When looking for relevant stored information
+   Parameter: query
+
+WHEN TO USE THESE TOOLS:
+- When the user explicitly asks you to remember something
+- When you need to recall information from previous conversations
+- When the user references something they told you before
+
+Use descriptive keys when storing information to make retrieval easier later.`;
 		} else {
-			instructions = `You have access to additional capabilities through the connected MCP server of type ${server.type}. When the user asks you to use these capabilities, utilize the MCP server. Follow the user's instructions regarding the MCP server carefully.`;
+			instructions = `You have access to an MCP server of type "${server.type}". You can use its tools when appropriate for handling user requests.`;
 		}
 		
 		return instructions;

@@ -1,0 +1,363 @@
+/**
+ * MCP Handler for Open WebUI
+ * 
+ * This module handles the integration between Open WebUI and Model Context Protocol (MCP) servers.
+ * It provides functions for tool registration, tool execution, and MCP server management.
+ */
+
+import { get } from 'svelte/store';
+import { mcpServers, settings } from '$lib/stores';
+
+/**
+ * Gets the currently connected MCP servers
+ * @returns {Array} Array of connected MCP server objects
+ */
+export function getConnectedMCPServers() {
+    const servers = get(mcpServers) || [];
+    return servers.filter(server => server.status === 'connected');
+}
+
+/**
+ * Gets the default MCP server if set
+ * @returns {Object|null} Default MCP server object or null
+ */
+export function getDefaultMCPServer() {
+    const userSettings = get(settings);
+    const defaultServerId = userSettings?.defaultMcpServer;
+    const servers = get(mcpServers) || [];
+    
+    if (defaultServerId) {
+        const defaultServer = servers.find(s => s.id === defaultServerId && s.status === 'connected');
+        return defaultServer || null;
+    }
+    
+    return null;
+}
+
+/**
+ * Generates tool definitions for a specific MCP server type
+ * @param {string} serverType - Type of MCP server (e.g., 'filesystem', 'memory')
+ * @returns {Array} Array of tool definitions
+ */
+export function getMCPTools(serverType) {
+    if (serverType === 'filesystem' || serverType === 'filesystem-py') {
+        return [
+            {
+                name: "list_directory",
+                description: "Lists all files and directories in the specified directory path",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the directory"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "read_file",
+                description: "Reads the content of a file",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the file"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "write_file",
+                description: "Creates a new file or overwrites an existing file",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path where the file should be created or overwritten"
+                        },
+                        content: {
+                            type: "string",
+                            description: "The content to write to the file"
+                        }
+                    },
+                    required: ["path", "content"]
+                }
+            },
+            {
+                name: "create_directory",
+                description: "Creates a new directory or ensures it exists",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path where the directory should be created"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "search_files",
+                description: "Searches for files matching a pattern in a directory",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the directory to search in"
+                        },
+                        pattern: {
+                            type: "string",
+                            description: "The search pattern (glob format)"
+                        }
+                    },
+                    required: ["path", "pattern"]
+                }
+            },
+            {
+                name: "get_file_info",
+                description: "Gets detailed information about a file or directory",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the file or directory"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "list_allowed_directories",
+                description: "Lists all directories that this server is allowed to access",
+                parameters: {
+                    type: "object",
+                    properties: {}
+                }
+            }
+        ];
+    } else if (serverType === 'memory') {
+        return [
+            {
+                name: "store_memory",
+                description: "Stores information in the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        key: {
+                            type: "string",
+                            description: "The key to store the information under"
+                        },
+                        value: {
+                            type: "string",
+                            description: "The information to store"
+                        }
+                    },
+                    required: ["key", "value"]
+                }
+            },
+            {
+                name: "retrieve_memory",
+                description: "Retrieves information from the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        key: {
+                            type: "string",
+                            description: "The key to retrieve information for"
+                        }
+                    },
+                    required: ["key"]
+                }
+            },
+            {
+                name: "search_memory",
+                description: "Searches for information in the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        query: {
+                            type: "string",
+                            description: "The search query"
+                        }
+                    },
+                    required: ["query"]
+                }
+            }
+        ];
+    }
+    
+    // Default empty tools for unknown server types
+    return [];
+}
+
+/**
+ * Gets the system prompt for MCP interaction
+ * @param {Object} server - MCP server object
+ * @returns {string} System prompt for MCP interaction
+ */
+export function getMCPSystemPrompt(server) {
+    if (!server) return '';
+    
+    let instructions = '';
+    
+    if (server.type === 'filesystem' || server.type === 'filesystem-py') {
+        // Get the allowed path from the server args
+        const allowedPath = server.args?.[server.args.length - 1] || '';
+        
+        // Determine path separator based on path format
+        const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
+        const pathSep = isWindows ? '\\' : '/';
+        
+        instructions = `You have access to a filesystem through an MCP server. You can perform operations on files and directories by using function calls when needed.
+
+When working with the filesystem:
+1. Only access paths under: ${allowedPath}
+2. Use ${isWindows ? 'backslashes' : 'forward slashes'} for paths
+3. Always provide absolute paths starting with ${allowedPath}
+
+Available functions:
+- list_directory(path): Lists files in a directory
+- read_file(path): Reads a file's contents
+- write_file(path, content): Creates or overwrites a file
+- create_directory(path): Creates a directory
+- search_files(path, pattern): Searches for files
+- get_file_info(path): Gets file metadata
+
+Examples:
+- To see files in ${allowedPath}: Use list_directory function
+- To read a file: Use read_file function
+- To create a file: Use write_file function
+
+When a user mentions files or wants to see directory contents, use these functions.`;
+    
+    } else if (server.type === 'memory') {
+        instructions = `You have access to a persistent memory system through an MCP server. You can store and retrieve information across conversations.
+
+Use memory functions when:
+- The user asks you to remember something
+- You need to recall previously stored information
+- The user asks about something you mentioned in a previous conversation
+
+Available functions:
+- store_memory(key, value): Stores information
+- retrieve_memory(key): Retrieves information
+- search_memory(query): Searches across stored memories
+
+When storing information, use descriptive keys that will make the information easy to find later.`;
+    } else {
+        instructions = `You have access to an MCP server of type ${server.type}. When appropriate, you can use the available functions to perform operations with this server.`;
+    }
+    
+    return instructions;
+}
+
+/**
+ * Executes an MCP tool call
+ * @param {string} serverId - ID of the MCP server to use
+ * @param {string} toolName - Name of the tool to call
+ * @param {Object} args - Arguments for the tool call
+ * @returns {Promise} Promise resolving to the result of the tool call
+ */
+export async function executeMCPToolCall(serverId, toolName, args) {
+    // In a real implementation, this would make a request to the backend
+    // which would then forward the request to the MCP server.
+    // For now, we'll simulate this with a console log and return mock data.
+    
+    console.log(`Executing MCP tool call: ${toolName}`, args);
+    
+    // This is where we would normally make an API call to execute the tool
+    // For example:
+    // const response = await fetch('/api/mcp/execute', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ serverId, toolName, args })
+    // });
+    // return await response.json();
+    
+    // For now, return a simple mock response
+    return {
+        status: 'success',
+        data: `Result of ${toolName} with args ${JSON.stringify(args)}`
+    };
+}
+
+/**
+ * Prepares message data for the model, including tool definitions
+ * @param {Array} messages - Conversation messages
+ * @param {Object} server - MCP server object
+ * @returns {Object} Prepared message data
+ */
+export function prepareMCPMessageData(messages, server) {
+    if (!server) {
+        return { messages };
+    }
+    
+    // Get tools for this server type
+    const tools = getMCPTools(server.type);
+    
+    // Prepare message data with tools
+    return {
+        messages,
+        tools,
+        tool_choice: "auto"
+    };
+}
+
+/**
+ * Processes model response to extract and execute tool calls
+ * @param {Object} response - Model response
+ * @param {string} serverId - ID of the MCP server to use
+ * @returns {Promise} Promise resolving to the processed response
+ */
+export async function processMCPModelResponse(response, serverId) {
+    // Check if the response contains tool calls
+    if (response.tool_calls && response.tool_calls.length > 0) {
+        // Process each tool call
+        for (const toolCall of response.tool_calls) {
+            const { name, arguments: args } = toolCall;
+            
+            // Execute the tool call
+            const result = await executeMCPToolCall(serverId, name, JSON.parse(args));
+            
+            // Add the tool call result to the response
+            // In a real implementation, this would be handled by the chat component
+            // to add the result to the conversation.
+            console.log(`Tool call result for ${name}:`, result);
+        }
+    }
+    
+    return response;
+}
+
+/**
+ * Adds MCP capabilities to a model request
+ * @param {Object} requestOptions - Original request options
+ * @returns {Object} Updated request options with MCP capabilities
+ */
+export function addMCPCapabilities(requestOptions) {
+    // Get the default or first connected MCP server
+    const defaultServer = getDefaultMCPServer();
+    const connectedServers = getConnectedMCPServers();
+    const server = defaultServer || (connectedServers.length > 0 ? connectedServers[0] : null);
+    
+    if (!server) {
+        return requestOptions;
+    }
+    
+    // Prepare message data with tools
+    const mcpMessageData = prepareMCPMessageData(requestOptions.messages, server);
+    
+    // Update request options
+    return {
+        ...requestOptions,
+        ...mcpMessageData
+    };
+}
