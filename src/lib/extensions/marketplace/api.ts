@@ -158,7 +158,8 @@ function getHardcodedExtensions(): MarketplaceExtension[] {
       },
       downloads: 1240,
       rating: 4.8,
-      repository: "https://github.com/ivanuser/prompt-library",
+      // Updated repository URL to point to the correct location in the extension marketplace
+      repository: "https://github.com/ivanuser/open-webui-extension-marketplace/tree/main/extensions/prompt-library",
       createdAt: "2025-03-15T10:00:00Z",
       updatedAt: "2025-03-15T10:00:00Z",
       manifest: "/extensions/prompt-library/manifest.json",
@@ -275,6 +276,7 @@ export async function fetchExtensionReleaseInfo(id: string): Promise<ReleaseInfo
       return {
         version: "0.1.0",
         releaseDate: "2025-03-15T10:00:00Z",
+        // Make sure this URL is correct for your ZIP file
         downloadUrl: "https://raw.githubusercontent.com/ivanuser/open-webui-extension-marketplace/main/extensions/prompt-library/releases/0.1.0.zip",
         sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         size: 245678,
