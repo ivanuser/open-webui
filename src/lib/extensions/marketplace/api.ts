@@ -354,8 +354,8 @@ export async function installMarketplaceExtension(
     
     console.log("Installation payload:", JSON.stringify(payload, null, 2));
     
-    // 3. Call the Open WebUI extension installation API
-    const installResponse = await fetch('/api/admin/extensions', {
+    // 3. Use the new dedicated installation endpoint
+    const installResponse = await fetch('/api/admin/extensions/install', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -374,7 +374,7 @@ export async function installMarketplaceExtension(
       let errorMessage = `Error ${installResponse.status}: ${installResponse.statusText}`;
       try {
         const errorData = JSON.parse(errorText);
-        errorMessage = errorData.message || errorData.detail || errorMessage;
+        errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
       } catch (e) {
         // If we can't parse JSON, just use the error text
         if (errorText) {
