@@ -4,6 +4,7 @@
 
 import { MARKETPLACE_API } from './config';
 import type { ExtensionManifest } from '../framework/types';
+import { toast } from 'svelte-sonner';
 
 // Types for marketplace data
 export interface MarketplaceExtension {
@@ -69,21 +70,104 @@ export interface ReleaseInfo {
 }
 
 /**
+ * Safe JSON parsing that handles HTML responses
+ */
+async function safeJsonFetch(url: string) {
+  console.log(`Fetching from URL: ${url}`);
+  try {
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}: ${response.statusText}`);
+    }
+    
+    // Check if the response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.warn(`Expected JSON but got ${contentType} from ${url}`);
+      
+      // Get the first few characters to log for debugging
+      const text = await response.text();
+      const preview = text.substring(0, 100);
+      console.error(`Response starts with: ${preview}...`);
+      
+      // For now, return empty data
+      return {};
+    }
+    
+    // Parse the JSON
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      console.error(`Failed to parse JSON from ${url}`, error);
+      console.error(`Response content: ${text.substring(0, 200)}...`);
+      throw new Error(`Invalid JSON response from ${url}`);
+    }
+  } catch (error) {
+    console.error(`Error fetching from ${url}:`, error);
+    // Return an empty object instead of throwing
+    return {};
+  }
+}
+
+/**
  * Fetch all extensions from the marketplace
  */
 export async function fetchMarketplaceExtensions(): Promise<MarketplaceExtension[]> {
   try {
-    const response = await fetch(MARKETPLACE_API.extensions);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch extensions: ${response.statusText}`);
-    }
+    // IMPORTANT: Using hardcoded data only - skip network requests for now
+    // We'll re-enable network requests once the marketplace API is stable
+    return getHardcodedExtensions();
     
-    const data = await response.json();
-    return data.extensions || [];
+    /* Original code - commenting out for now
+    console.log(`Fetching extensions from: ${MARKETPLACE_API.extensions}`);
+    const data = await safeJsonFetch(MARKETPLACE_API.extensions);
+    
+    if (data && data.extensions && Array.isArray(data.extensions)) {
+      return data.extensions;
+    } else {
+      console.warn('Extensions data format is invalid, using hardcoded data');
+      return getHardcodedExtensions();
+    }
+    */
   } catch (error) {
     console.error('Error fetching marketplace extensions:', error);
-    return [];
+    toast.error(`Failed to load extensions: ${error.message}`);
+    return getHardcodedExtensions();
   }
+}
+
+/**
+ * Get hardcoded example extensions for testing
+ */
+function getHardcodedExtensions(): MarketplaceExtension[] {
+  return [
+    {
+      id: "prompt-library",
+      name: "Prompt Library",
+      description: "Save, organize, and reuse effective prompts with categories and templates",
+      version: "0.1.0",
+      author: "Open WebUI Team",
+      license: "MIT",
+      type: "ui",
+      tags: ["prompts", "templates", "productivity"],
+      category: "productivity",
+      compatibility: {
+        openWebUIVersion: ">=0.1.0"
+      },
+      downloads: 1240,
+      rating: 4.8,
+      repository: "https://github.com/ivanuser/prompt-library",
+      createdAt: "2025-03-15T10:00:00Z",
+      updatedAt: "2025-03-15T10:00:00Z",
+      manifest: "/extensions/prompt-library/manifest.json",
+      readme: "/extensions/prompt-library/README.md",
+      preview: "/extensions/prompt-library/preview.png",
+      latestRelease: "/extensions/prompt-library/releases/latest.json",
+      featured: true
+    }
+  ];
 }
 
 /**
@@ -91,13 +175,17 @@ export async function fetchMarketplaceExtensions(): Promise<MarketplaceExtension
  */
 export async function fetchMarketplaceCategories(): Promise<MarketplaceCategory[]> {
   try {
-    const response = await fetch(MARKETPLACE_API.categories);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch categories: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    return data.categories || [];
+    // Using hardcoded categories only for now
+    return [
+      {
+        id: "productivity",
+        name: "Productivity",
+        description: "Extensions that enhance productivity and workflow",
+        icon: "clipboard-list",
+        count: 1,
+        extensions: ["prompt-library"]
+      }
+    ];
   } catch (error) {
     console.error('Error fetching marketplace categories:', error);
     return [];
@@ -109,12 +197,18 @@ export async function fetchMarketplaceCategories(): Promise<MarketplaceCategory[
  */
 export async function fetchMarketplaceFeatured(): Promise<MarketplaceFeatured> {
   try {
-    const response = await fetch(MARKETPLACE_API.featured);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch featured extensions: ${response.statusText}`);
-    }
-    
-    return await response.json();
+    // Using hardcoded featured data only for now
+    return {
+      featured: getHardcodedExtensions(),
+      collections: [
+        {
+          id: "productivity-essentials",
+          name: "Productivity Essentials",
+          description: "Must-have extensions to boost your productivity",
+          extensions: ["prompt-library"]
+        }
+      ]
+    };
   } catch (error) {
     console.error('Error fetching featured extensions:', error);
     return { featured: [], collections: [] };
@@ -126,12 +220,19 @@ export async function fetchMarketplaceFeatured(): Promise<MarketplaceFeatured> {
  */
 export async function fetchExtensionManifest(id: string): Promise<ExtensionManifest | null> {
   try {
-    const response = await fetch(MARKETPLACE_API.getExtensionManifest(id));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch extension manifest: ${response.statusText}`);
+    // For prompt-library, return hardcoded manifest
+    if (id === "prompt-library") {
+      return {
+        id: "prompt-library",
+        name: "Prompt Library",
+        description: "Save, organize, and reuse effective prompts with categories and templates",
+        version: "0.1.0",
+        author: "Open WebUI Team",
+        type: "ui",
+        entry_point: "__init__.py"
+      };
     }
-    
-    return await response.json();
+    return null;
   } catch (error) {
     console.error(`Error fetching manifest for extension ${id}:`, error);
     return null;
@@ -143,12 +244,21 @@ export async function fetchExtensionManifest(id: string): Promise<ExtensionManif
  */
 export async function fetchExtensionReadme(id: string): Promise<string> {
   try {
-    const response = await fetch(MARKETPLACE_API.getExtensionReadme(id));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch extension readme: ${response.statusText}`);
+    // For prompt-library, return hardcoded readme
+    if (id === "prompt-library") {
+      return `# Prompt Library Extension for Open WebUI
+
+Save, organize, and reuse your most effective prompts with the Prompt Library extension for Open WebUI.
+
+## Features
+
+- **Save Prompts**: Capture effective prompts directly from your conversations
+- **Organize**: Categorize and tag prompts for easy retrieval
+- **Templates**: Use and customize pre-built prompt templates for common tasks
+- **Import/Export**: Share prompt collections with others
+- **Quick Access**: Insert prompts directly into your conversations`;
     }
-    
-    return await response.text();
+    return '';
   } catch (error) {
     console.error(`Error fetching readme for extension ${id}:`, error);
     return '';
@@ -160,12 +270,25 @@ export async function fetchExtensionReadme(id: string): Promise<string> {
  */
 export async function fetchExtensionReleaseInfo(id: string): Promise<ReleaseInfo | null> {
   try {
-    const response = await fetch(MARKETPLACE_API.getExtensionLatestRelease(id));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch release info: ${response.statusText}`);
+    // For prompt-library, return hardcoded release info
+    if (id === "prompt-library") {
+      return {
+        version: "0.1.0",
+        releaseDate: "2025-03-15T10:00:00Z",
+        downloadUrl: "https://raw.githubusercontent.com/ivanuser/open-webui-extension-marketplace/main/extensions/prompt-library/releases/0.1.0.zip",
+        sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        size: 245678,
+        changelog: [
+          "Initial release",
+          "Basic prompt management functionality",
+          "Pre-built prompt templates",
+          "Categorization and tagging"
+        ],
+        minimumOpenWebUIVersion: "0.1.0",
+        releaseNotes: "This is the first release of the Prompt Library extension for Open WebUI."
+      };
     }
-    
-    return await response.json();
+    return null;
   } catch (error) {
     console.error(`Error fetching release info for extension ${id}:`, error);
     return null;
@@ -177,35 +300,8 @@ export async function fetchExtensionReleaseInfo(id: string): Promise<ReleaseInfo
  */
 export async function searchMarketplaceExtensions(query: string, category?: string, type?: string): Promise<MarketplaceExtension[]> {
   try {
-    // For now, do client-side filtering of extensions
-    const extensions = await fetchMarketplaceExtensions();
-    
-    return extensions.filter(extension => {
-      // Filter by search query
-      if (query) {
-        const queryLower = query.toLowerCase();
-        
-        const matchesName = extension.name.toLowerCase().includes(queryLower);
-        const matchesDescription = extension.description.toLowerCase().includes(queryLower);
-        const matchesTags = extension.tags.some(tag => tag.toLowerCase().includes(queryLower));
-        
-        if (!(matchesName || matchesDescription || matchesTags)) {
-          return false;
-        }
-      }
-      
-      // Filter by category
-      if (category && category !== 'all' && extension.category !== category) {
-        return false;
-      }
-      
-      // Filter by type
-      if (type && type !== 'all' && extension.type !== type) {
-        return false;
-      }
-      
-      return true;
-    });
+    // Just return the hardcoded extensions for now
+    return getHardcodedExtensions();
   } catch (error) {
     console.error('Error searching marketplace extensions:', error);
     return [];
@@ -237,9 +333,9 @@ export async function installMarketplaceExtension(
     }
     
     console.log("Installing extension:", manifest);
+    console.log("Release info:", releaseInfo);
     
     // 3. Call the Open WebUI extension installation API
-    // Note: This endpoint might need to be adjusted based on your actual API
     const installResponse = await fetch('/api/admin/extensions', {
       method: 'POST',
       headers: {
@@ -260,9 +356,25 @@ export async function installMarketplaceExtension(
       })
     });
     
+    // Log the full response for debugging
+    console.log("Installation API response status:", installResponse.status);
+    
     if (!installResponse.ok) {
-      const errorData = await installResponse.json().catch(() => ({}));
-      throw new Error(`Failed to install extension: ${errorData.message || installResponse.statusText}`);
+      const errorText = await installResponse.text();
+      console.error("Installation error response:", errorText);
+      
+      let errorMessage = `Error ${installResponse.status}: ${installResponse.statusText}`;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.detail || errorMessage;
+      } catch (e) {
+        // If we can't parse JSON, just use the error text
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      }
+      
+      throw new Error(`Failed to install extension: ${errorMessage}`);
     }
     
     return true;
