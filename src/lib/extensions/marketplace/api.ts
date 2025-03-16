@@ -335,6 +335,23 @@ export async function installMarketplaceExtension(
     console.log("Installing extension:", manifest);
     console.log("Release info:", releaseInfo);
     
+    // Prepare request payload
+    const payload = {
+      id: extensionId,  // Added explicit ID
+      name: manifest.name,
+      description: manifest.description,
+      version: manifest.version,
+      author: manifest.author,
+      type: manifest.type,
+      source: {
+        type: 'marketplace',
+        id: extensionId,
+        url: releaseInfo.downloadUrl
+      }
+    };
+    
+    console.log("Installation payload:", JSON.stringify(payload, null, 2));
+    
     // 3. Call the Open WebUI extension installation API
     const installResponse = await fetch('/api/admin/extensions', {
       method: 'POST',
@@ -342,18 +359,7 @@ export async function installMarketplaceExtension(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        name: manifest.name,
-        description: manifest.description,
-        version: manifest.version,
-        author: manifest.author,
-        type: manifest.type,
-        source: {
-          type: 'marketplace',
-          id: extensionId,
-          url: releaseInfo.downloadUrl
-        }
-      })
+      body: JSON.stringify(payload)
     });
     
     // Log the full response for debugging
@@ -376,6 +382,10 @@ export async function installMarketplaceExtension(
       
       throw new Error(`Failed to install extension: ${errorMessage}`);
     }
+    
+    // 4. Get the response data
+    const responseData = await installResponse.json();
+    console.log("Installation successful:", responseData);
     
     return true;
   } catch (error) {
