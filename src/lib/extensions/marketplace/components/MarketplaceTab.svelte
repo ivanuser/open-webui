@@ -214,6 +214,20 @@
     />
   {:else}
     <div class="space-y-6">
+      <!-- Logo header -->
+      <div class="flex justify-center mb-4">
+        <div class="text-center">
+          <img 
+            src="/images/marketplace/extensplace-logo.png" 
+            alt="Open-WebUI Extensplace" 
+            class="w-48 h-auto mx-auto" 
+          />
+          <h1 class="text-2xl font-bold mt-2 bg-gradient-to-r from-red-500 to-orange-500 text-transparent bg-clip-text">
+            Open-WebUI Extensplace
+          </h1>
+        </div>
+      </div>
+      
       <!-- Header with search and filters -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 class="text-xl font-bold">Extension Marketplace</h2>
