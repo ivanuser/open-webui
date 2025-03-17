@@ -1,0 +1,13 @@
+{
+  "id": "prompt-library",
+  "name": "Prompt Library",
+  "description": "Save, organize, and reuse effective prompts with categories and templates",
+  "version": "0.1.0",
+  "author": "Open WebUI Team",
+  "type": "ui",
+  "entry_point": "__init__.py",
+  "sidebar": {
+    "icon": "BookOpen",
+    "label": "Prompt Library"
+  }
+}

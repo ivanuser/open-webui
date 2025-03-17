@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { toast } from 'svelte-sonner';
   import { 
     extensions, 
     extensionsLoading,
@@ -28,8 +29,37 @@
   let activeTab: ExtensionType | 'all' = 'all';
   let activeSection = 'installed'; // 'installed' or 'marketplace'
   
+  let localExtensions = [];
+  let loading = false;
+  
+  // Hardcoded extension for testing
+  let mockExtensions = [
+    {
+      manifest: {
+        id: "prompt-library",
+        name: "Prompt Library",
+        description: "Save, organize, and reuse effective prompts with categories and templates",
+        version: "0.1.0",
+        author: "Open WebUI Team",
+        type: "ui",
+        main: "main.js",
+        entry_point: "__init__.py",
+        sidebar: {
+          icon: "BookOpen",
+          label: "Prompt Library"
+        }
+      },
+      enabled: true,
+      installed: true,
+      settings: {},
+      installDate: new Date("2025-03-15T10:00:00Z"),
+      updateDate: new Date("2025-03-15T10:00:00Z"),
+      status: "enabled"
+    }
+  ];
+  
   // Computed
-  $: filteredExtensions = Array.from($extensions.values())
+  $: filteredExtensions = localExtensions
     .filter(extension => {
       // Filter by search query
       if (searchQuery) {
@@ -59,11 +89,21 @@
   
   // Lifecycle
   onMount(async () => {
-    await fetchExtensions();
+    // Load mock extensions
+    loading = true;
+    try {
+      // Use local mock data for development
+      localExtensions = [...mockExtensions];
+    } catch (error) {
+      console.error('Error loading extensions:', error);
+      toast.error('Failed to load extensions');
+    } finally {
+      loading = false;
+    }
   });
   
   // Methods
-  function handleSettingsClick(event: CustomEvent<{ id: string }>) {
+  function handleSettingsClick(event) {
     selectedExtensionId = event.detail.id;
   }
   
@@ -78,37 +118,50 @@
   
   function handleExtensionInstalled() {
     showInstallForm = false;
-    fetchExtensions();
+    // Refresh the extensions list
+    fetchMockExtensions();
   }
   
   function handleSettingsUpdated() {
     selectedExtensionId = null;
   }
   
-  function handleExtensionToggle() {
-    // Refresh the extensions list
-    fetchExtensions();
+  function handleExtensionToggle(event) {
+    const extensionId = event.detail.id;
+    const extensionIndex = localExtensions.findIndex(ext => ext.manifest.id === extensionId);
+    
+    if (extensionIndex >= 0) {
+      // Update the enabled status
+      localExtensions[extensionIndex].enabled = !localExtensions[extensionIndex].enabled;
+      localExtensions[extensionIndex].status = localExtensions[extensionIndex].enabled ? "enabled" : "disabled";
+      localExtensions = [...localExtensions]; // Trigger reactivity
+    }
   }
   
-  function handleExtensionUninstall() {
-    // Refresh the extensions list
-    fetchExtensions();
+  function handleExtensionUninstall(event) {
+    const extensionId = event.detail.id;
+    localExtensions = localExtensions.filter(ext => ext.manifest.id !== extensionId);
   }
   
-  function getSelectedExtension(): Extension | null {
+  function getSelectedExtension() {
     if (!selectedExtensionId) {
       return null;
     }
     
-    return $extensions.get(selectedExtensionId) || null;
+    return localExtensions.find(ext => ext.manifest.id === selectedExtensionId) || null;
   }
   
-  function setActiveTab(tab: ExtensionType | 'all') {
+  function setActiveTab(tab) {
     activeTab = tab;
   }
   
-  function setActiveSection(section: string) {
+  function setActiveSection(section) {
     activeSection = section;
+  }
+  
+  function fetchMockExtensions() {
+    // For development purposes, we'll just use the mock data
+    localExtensions = [...mockExtensions];
   }
 </script>
 
@@ -190,12 +243,12 @@
             </div>
           </div>
           
-          {#if $extensionsLoading}
+          {#if loading}
             <div class="flex flex-col items-center justify-center py-8">
               <ArrowPath class="w-8 h-8 animate-spin text-gray-400" />
               <p class="mt-2 text-sm text-gray-500">Loading extensions...</p>
             </div>
-          {:else if $extensions.size === 0}
+          {:else if localExtensions.length === 0}
             <div class="border rounded-md flex flex-col items-center justify-center p-8">
               <div class="text-center space-y-2">
                 <h3 class="text-lg font-medium">No Extensions Installed</h3>
@@ -236,24 +289,6 @@
                   on:settings={handleSettingsClick}
                 />
               {/each}
-            </div>
-          {/if}
-          
-          {#if $extensionErrors.size > 0}
-            <div class="mt-4 p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20 dark:border-red-400 text-red-700 dark:text-red-300">
-              <div class="flex items-start">
-                <Info class="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 class="font-medium">Extension Errors</h3>
-                  <ul class="mt-2 space-y-1 list-disc list-inside pl-4">
-                    {#each Array.from($extensionErrors.entries()) as [id, error]}
-                      <li>
-                        <span class="font-medium">{$extensions.get(id)?.manifest.name || id}:</span> {error}
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              </div>
             </div>
           {/if}
         </div>

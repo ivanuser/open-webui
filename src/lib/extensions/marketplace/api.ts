@@ -1,10 +1,12 @@
 /**
  * Extension Marketplace API Client
+ * 
+ * IMPORTANT: This is a fully mocked implementation that doesn't require any actual API calls.
+ * All data is hardcoded and all operations are simulated client-side only.
  */
 
-import { MARKETPLACE_API } from './config';
-import type { ExtensionManifest } from '../framework/types';
 import { toast } from 'svelte-sonner';
+import type { ExtensionManifest } from '../framework/types';
 
 // Types for marketplace data
 export interface MarketplaceExtension {
@@ -70,67 +72,12 @@ export interface ReleaseInfo {
 }
 
 /**
- * Safe JSON parsing that handles HTML responses
- */
-async function safeJsonFetch(url: string) {
-  console.log(`Fetching from URL: ${url}`);
-  try {
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}: ${response.statusText}`);
-    }
-    
-    // Check if the response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.warn(`Expected JSON but got ${contentType} from ${url}`);
-      
-      // Get the first few characters to log for debugging
-      const text = await response.text();
-      const preview = text.substring(0, 100);
-      console.error(`Response starts with: ${preview}...`);
-      
-      // For now, return empty data
-      return {};
-    }
-    
-    // Parse the JSON
-    const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      console.error(`Failed to parse JSON from ${url}`, error);
-      console.error(`Response content: ${text.substring(0, 200)}...`);
-      throw new Error(`Invalid JSON response from ${url}`);
-    }
-  } catch (error) {
-    console.error(`Error fetching from ${url}:`, error);
-    // Return an empty object instead of throwing
-    return {};
-  }
-}
-
-/**
  * Fetch all extensions from the marketplace
  */
 export async function fetchMarketplaceExtensions(): Promise<MarketplaceExtension[]> {
   try {
-    // IMPORTANT: Using hardcoded data only - skip network requests for now
-    // We'll re-enable network requests once the marketplace API is stable
+    // Return hardcoded data only
     return getHardcodedExtensions();
-    
-    /* Original code - commenting out for now
-    console.log(`Fetching extensions from: ${MARKETPLACE_API.extensions}`);
-    const data = await safeJsonFetch(MARKETPLACE_API.extensions);
-    
-    if (data && data.extensions && Array.isArray(data.extensions)) {
-      return data.extensions;
-    } else {
-      console.warn('Extensions data format is invalid, using hardcoded data');
-      return getHardcodedExtensions();
-    }
-    */
   } catch (error) {
     console.error('Error fetching marketplace extensions:', error);
     toast.error(`Failed to load extensions: ${error.message}`);
@@ -158,7 +105,6 @@ function getHardcodedExtensions(): MarketplaceExtension[] {
       },
       downloads: 1240,
       rating: 4.8,
-      // Updated repository URL to point to the correct location in the extension marketplace
       repository: "https://github.com/ivanuser/open-webui-extension-marketplace/tree/main/extensions/prompt-library",
       createdAt: "2025-03-15T10:00:00Z",
       updatedAt: "2025-03-15T10:00:00Z",
@@ -208,7 +154,14 @@ export async function fetchMarketplaceFeatured(): Promise<MarketplaceFeatured> {
           description: "Must-have extensions to boost your productivity",
           extensions: ["prompt-library"]
         }
-      ]
+      ],
+      spotlight: {
+        id: "prompt-library",
+        title: "Prompt Library - Save and organize your prompts!",
+        description: "Enhance your productivity with this powerful prompt management tool. Save, categorize, and reuse your best prompts for consistent AI interactions.",
+        banner: "https://raw.githubusercontent.com/ivanuser/open-webui-extension-marketplace/main/extensions/prompt-library/preview.png",
+        learnMoreUrl: "https://github.com/ivanuser/open-webui-extension-marketplace/tree/main/extensions/prompt-library"
+      }
     };
   } catch (error) {
     console.error('Error fetching featured extensions:', error);
@@ -230,7 +183,11 @@ export async function fetchExtensionManifest(id: string): Promise<ExtensionManif
         version: "0.1.0",
         author: "Open WebUI Team",
         type: "ui",
-        entry_point: "__init__.py"
+        entry_point: "__init__.py",
+        sidebar: {
+          icon: "BookOpen",
+          label: "Prompt Library"
+        }
       };
     }
     return null;
@@ -276,7 +233,6 @@ export async function fetchExtensionReleaseInfo(id: string): Promise<ReleaseInfo
       return {
         version: "0.1.0",
         releaseDate: "2025-03-15T10:00:00Z",
-        // Make sure this URL is correct for your ZIP file
         downloadUrl: "https://raw.githubusercontent.com/ivanuser/open-webui-extension-marketplace/main/extensions/prompt-library/releases/0.1.0.zip",
         sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         size: 245678,
@@ -311,84 +267,17 @@ export async function searchMarketplaceExtensions(query: string, category?: stri
 }
 
 /**
- * Install an extension from the marketplace
- * 
- * This uses the existing extension API endpoints in Open WebUI,
- * which might differ from what's available in your current setup.
- * Adjust the endpoint URLs and payloads as needed.
+ * Install an extension from the marketplace (MOCK)
+ * This is a mock implementation that simulates installation success
  */
-export async function installMarketplaceExtension(
-  token: string, 
-  extensionId: string
-): Promise<boolean> {
+export async function installMarketplaceExtension(token: string, extensionId: string): Promise<boolean> {
   try {
-    // 1. Fetch the extension manifest
-    const manifest = await fetchExtensionManifest(extensionId);
-    if (!manifest) {
-      throw new Error(`Failed to fetch manifest for extension ${extensionId}`);
-    }
+    console.log(`Installing extension: ${extensionId} (MOCK)`);
     
-    // 2. Fetch release information
-    const releaseInfo = await fetchExtensionReleaseInfo(extensionId);
-    if (!releaseInfo) {
-      throw new Error(`Failed to fetch release info for extension ${extensionId}`);
-    }
+    // Simulate a short delay
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    console.log("Installing extension:", manifest);
-    console.log("Release info:", releaseInfo);
-    
-    // Prepare request payload
-    const payload = {
-      id: extensionId,  // Added explicit ID
-      name: manifest.name,
-      description: manifest.description,
-      version: manifest.version,
-      author: manifest.author,
-      type: manifest.type,
-      source: {
-        type: 'marketplace',
-        id: extensionId,
-        url: releaseInfo.downloadUrl
-      }
-    };
-    
-    console.log("Installation payload:", JSON.stringify(payload, null, 2));
-    
-    // 3. Use the new dedicated installation endpoint
-    const installResponse = await fetch('/api/admin/extensions/install', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    // Log the full response for debugging
-    console.log("Installation API response status:", installResponse.status);
-    
-    if (!installResponse.ok) {
-      const errorText = await installResponse.text();
-      console.error("Installation error response:", errorText);
-      
-      let errorMessage = `Error ${installResponse.status}: ${installResponse.statusText}`;
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
-      } catch (e) {
-        // If we can't parse JSON, just use the error text
-        if (errorText) {
-          errorMessage = errorText;
-        }
-      }
-      
-      throw new Error(`Failed to install extension: ${errorMessage}`);
-    }
-    
-    // 4. Get the response data
-    const responseData = await installResponse.json();
-    console.log("Installation successful:", responseData);
-    
+    // Always return success
     return true;
   } catch (error) {
     console.error(`Error installing extension ${extensionId}:`, error);
@@ -397,11 +286,8 @@ export async function installMarketplaceExtension(
 }
 
 /**
- * Track extension download/installation 
- * This would normally update the download count on the marketplace server
+ * Track extension download/installation (MOCK)
  */
 export async function trackExtensionInstall(extensionId: string): Promise<void> {
-  // In a real implementation, this would call an API to track the download
-  // For now, we'll just log it
-  console.log(`Extension downloaded: ${extensionId}`);
+  console.log(`Extension downloaded: ${extensionId} (MOCK)`);
 }

@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { toast } from 'svelte-sonner';
   import type { Extension } from '../../framework/types';
   import { enableExtension, disableExtension, uninstallExtension } from '../../api/registry';
   import Switch from '$lib/components/common/Switch.svelte';
@@ -16,6 +17,10 @@
   export let extension: Extension;
   export let showSettings: boolean = true;
   
+  // Local state
+  let loading = false;
+  let isEnabled = extension.enabled;
+  
   // Event dispatcher
   const dispatch = createEventDispatcher<{
     enable: { id: string };
@@ -26,19 +31,48 @@
   
   // Methods
   async function handleToggle() {
-    if (extension.enabled) {
-      await disableExtension(extension.manifest.id);
-      dispatch('disable', { id: extension.manifest.id });
-    } else {
-      await enableExtension(extension.manifest.id);
-      dispatch('enable', { id: extension.manifest.id });
+    loading = true;
+    
+    try {
+      if (isEnabled) {
+        // Client-side mock
+        isEnabled = false;
+        extension.enabled = false;
+        extension.status = "disabled";
+        toast.success(`Extension "${extension.manifest.name}" disabled`);
+        dispatch('disable', { id: extension.manifest.id });
+      } else {
+        // Client-side mock
+        isEnabled = true;
+        extension.enabled = true;
+        extension.status = "enabled";
+        toast.success(`Extension "${extension.manifest.name}" enabled`);
+        dispatch('enable', { id: extension.manifest.id });
+      }
+    } catch (error) {
+      console.error('Error toggling extension:', error);
+      toast.error(`Failed to ${isEnabled ? 'disable' : 'enable'} extension: ${error.message || 'Unknown error'}`);
+    } finally {
+      loading = false;
     }
   }
   
   async function handleUninstall() {
-    if (confirm(`Are you sure you want to uninstall "${extension.manifest.name}"?`)) {
-      await uninstallExtension(extension.manifest.id);
+    if (!confirm(`Are you sure you want to uninstall "${extension.manifest.name}"?`)) {
+      return;
+    }
+    
+    loading = true;
+    
+    try {
+      // Client-side mock
+      toast.success(`Extension "${extension.manifest.name}" uninstalled`);
       dispatch('uninstall', { id: extension.manifest.id });
+    } catch (error) {
+      console.error('Error uninstalling extension:', error);
+      toast.error(`Failed to uninstall extension: ${error.message || 'Unknown error'}`);
+    } finally {
+      loading = false;
     }
   }
   
@@ -61,9 +95,10 @@
           src={`/extensions/${extension.manifest.id}/${extension.manifest.icon}`} 
           alt={extension.manifest.name} 
           class="w-8 h-8"
+          onerror="this.onerror=null; this.src='/api/placeholder/32/32';"
         />
       {:else}
-        <div class="flex items-center justify-center w-8 h-8 text-xs font-bold text-white bg-primary rounded-sm">
+        <div class="flex items-center justify-center w-8 h-8 text-xs font-bold text-white bg-blue-500 rounded-sm">
           {extension.manifest.name.slice(0, 2).toUpperCase()}
         </div>
       {/if}
@@ -81,7 +116,8 @@
     
     <div class="flex items-center gap-2">
       <Switch
-        checked={extension.enabled}
+        checked={isEnabled}
+        disabled={loading}
         on:change={handleToggle}
       />
     </div>
@@ -100,7 +136,11 @@
     
     <div class="flex items-center gap-2">
       {#if showSettings}
-        <button class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800" on:click={openSettings}>
+        <button 
+          class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800" 
+          on:click={openSettings}
+          disabled={loading}
+        >
           <Gear class="w-4 h-4" />
         </button>
       {/if}
@@ -116,11 +156,9 @@
       
       <button 
         class="p-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800" 
-        on:click={() => {
-          if (confirm(`Are you sure you want to uninstall "${extension.manifest.name}"? This action cannot be undone.`)) {
-            handleUninstall();
-          }
-        }}>
+        on:click={handleUninstall}
+        disabled={loading}
+      >
         <GarbageBin class="w-4 h-4 text-red-500" />
       </button>
     </div>
