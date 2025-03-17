@@ -122,18 +122,69 @@ function updateExtensionsStore(extensionsList: Extension[]) {
  */
 export function getSidebarNavItems() {
   const items = [];
-  const extensionsMap = get(extensions);
   
-  for (const [id, extension] of extensionsMap.entries()) {
-    if (extension.enabled && extension.manifest.sidebar) {
-      items.push({
-        id: `extension-${id}`,
-        label: extension.manifest.sidebar.label || extension.manifest.name,
-        icon: extension.manifest.sidebar.icon || 'PuzzlePiece',
-        href: `/extensions/${id}`,
-        type: 'extension'
-      });
+  try {
+    // First check for extensions that have a sidebar.json file
+    if (browser) {
+      // Look in each extension directory for sidebar.json
+      const extensionDirs = ['prompt-library']; // This would ideally be fetched from the server
+      
+      for (const extId of extensionDirs) {
+        try {
+          // Try to dynamically import the sidebar.json file
+          // Since we can't dynamically import JSON files, we'll make an API call instead
+          fetch(`/extensions/${extId}/sidebar.json`)
+            .then(response => {
+              if (response.ok) {
+                return response.json();
+              }
+              return null;
+            })
+            .then(data => {
+              if (data) {
+                items.push({
+                  id: `extension-${data.id}`,
+                  label: data.label,
+                  icon: data.icon || 'PuzzlePiece',
+                  href: data.href || `/extensions/${data.id}`,
+                  type: 'extension'
+                });
+                
+                // Force update of sidebar
+                const event = new CustomEvent('extension-sidebar-updated', { detail: items });
+                window.dispatchEvent(event);
+              }
+            })
+            .catch(error => {
+              console.error(`Error loading sidebar.json for extension ${extId}:`, error);
+            });
+        } catch (error) {
+          console.error(`Error loading sidebar for extension ${extId}:`, error);
+        }
+      }
     }
+    
+    // Then add any extensions from the store that have sidebar metadata
+    const extensionsMap = get(extensions);
+    
+    for (const [id, extension] of extensionsMap.entries()) {
+      if (extension.enabled && extension.manifest.sidebar) {
+        // Check if this extension is already in items
+        const exists = items.some(item => item.id === `extension-${id}`);
+        
+        if (!exists) {
+          items.push({
+            id: `extension-${id}`,
+            label: extension.manifest.sidebar.label || extension.manifest.name,
+            icon: extension.manifest.sidebar.icon || 'PuzzlePiece',
+            href: `/extensions/${id}`,
+            type: 'extension'
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error getting sidebar nav items:', error);
   }
   
   return items;

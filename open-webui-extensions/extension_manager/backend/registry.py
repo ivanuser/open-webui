@@ -7,9 +7,11 @@ import importlib.util
 import logging
 import json
 import sys
+import shutil
 from typing import Dict, List, Optional, Any, Tuple
 
 from .models import Extension, ExtensionStatus, ExtensionType
+from .db import ExtensionDatabase
 
 # Setup logging
 logger = logging.getLogger("extension_registry")
@@ -31,7 +33,12 @@ class ExtensionRegistry:
         Args:
             database: Database connection for extension persistence
         """
-        self.database = database
+        # Initialize database if not provided
+        if database is None:
+            self.database = ExtensionDatabase()
+        else:
+            self.database = database
+            
         self.extensions: Dict[str, Extension] = {}
         self.loaded_extensions: Dict[str, Any] = {}
         
@@ -75,6 +82,19 @@ class ExtensionRegistry:
                                 with open(manifest_path, 'r') as f:
                                     manifest = json.load(f)
                                 
+                                # Check database for extension status
+                                db_entry = self.database.get_extension(manifest.get('id', entry))
+                                
+                                # If extension is marked as uninstalled in the database, skip it
+                                if db_entry and db_entry.get('installed') is False:
+                                    logger.info(f"Skipping uninstalled extension: {entry}")
+                                    continue
+                                
+                                # Default status is enabled unless database says otherwise
+                                status = ExtensionStatus.ENABLED
+                                if db_entry and db_entry.get('status') == 'disabled':
+                                    status = ExtensionStatus.DISABLED
+                                
                                 # Create extension from manifest
                                 extension = Extension(
                                     name=manifest.get('name', entry),
@@ -83,21 +103,27 @@ class ExtensionRegistry:
                                     author=manifest.get('author', 'Unknown'),
                                     type=manifest.get('type', 'ui'),
                                     entry_point=manifest.get('entry_point', '__init__.py'),
+                                    status=status,
                                     config=manifest.get('config', {})
                                 )
                                 
+                                # Add to discovered extensions
                                 discovered_extensions.append(extension)
                                 self.extensions[extension.id] = extension
-                                logger.info(f"Discovered extension: {extension.name} (ID: {extension.id})")
+                                logger.info(f"Discovered extension: {extension.name} (ID: {extension.id}, Status: {extension.status})")
+                                
+                                # Save to database if not already there
+                                if not db_entry:
+                                    self.database.save_extension(extension.id, {
+                                        'name': extension.name,
+                                        'version': extension.version,
+                                        'status': extension.status,
+                                        'installed': True,
+                                        'config': extension.config
+                                    })
                                 
                             except Exception as e:
                                 logger.error(f"Error loading extension manifest from {manifest_path}: {e}")
-        
-        # Also load extensions from database if available
-        if self.database:
-            # Load extensions from database
-            # This is a placeholder for actual database loading
-            pass
             
         return discovered_extensions
     
@@ -116,9 +142,15 @@ class ExtensionRegistry:
         
         extension = self.extensions[extension_id]
         
-        # If already loaded, return success
-        if extension_id in self.loaded_extensions:
+        # If already loaded and enabled, return success
+        if extension_id in self.loaded_extensions and extension.status == ExtensionStatus.ENABLED:
             return True, f"Extension already loaded: {extension.name}"
+        
+        # If disabled in database, don't load
+        db_entry = self.database.get_extension(extension_id)
+        if db_entry and db_entry.get('status') == 'disabled':
+            extension.status = ExtensionStatus.DISABLED
+            return False, f"Extension is disabled: {extension.name}"
         
         try:
             # Find extension directory
@@ -150,6 +182,11 @@ class ExtensionRegistry:
             
             self.loaded_extensions[extension_id] = module
             extension.status = ExtensionStatus.ENABLED
+            
+            # Update database
+            self.database.update_extension(extension_id, {
+                'status': 'enabled'
+            })
             
             logger.info(f"Loaded extension: {extension.name} (ID: {extension_id})")
             return True, f"Extension loaded: {extension.name}"
@@ -194,6 +231,11 @@ class ExtensionRegistry:
             
             extension.status = ExtensionStatus.DISABLED
             
+            # Update database
+            self.database.update_extension(extension_id, {
+                'status': 'disabled'
+            })
+            
             logger.info(f"Unloaded extension: {extension.name} (ID: {extension_id})")
             return True, f"Extension unloaded: {extension.name}"
             
@@ -235,15 +277,14 @@ class ExtensionRegistry:
         if extension_id not in self.extensions:
             return False, f"Extension not found: {extension_id}"
         
+        # Update database first
+        self.database.update_extension(extension_id, {
+            'status': 'enabled'
+        })
+        
         # Load the extension
         success, message = self.load_extension(extension_id)
         if success:
-            # Update status in database if available
-            if self.database:
-                # Update extension status in database
-                # This is a placeholder for actual database update
-                pass
-                
             extension = self.extensions[extension_id]
             return True, f"Extension enabled: {extension.name}"
         
@@ -262,15 +303,14 @@ class ExtensionRegistry:
         if extension_id not in self.extensions:
             return False, f"Extension not found: {extension_id}"
         
+        # Update database first
+        self.database.update_extension(extension_id, {
+            'status': 'disabled'
+        })
+        
         # Unload the extension
         success, message = self.unload_extension(extension_id)
         if success:
-            # Update status in database if available
-            if self.database:
-                # Update extension status in database
-                # This is a placeholder for actual database update
-                pass
-                
             extension = self.extensions[extension_id]
             return True, f"Extension disabled: {extension.name}"
         
@@ -293,11 +333,14 @@ class ExtensionRegistry:
             # Add to registry
             self.extensions[extension.id] = extension
             
-            # Save to database if available
-            if self.database:
-                # Save extension to database
-                # This is a placeholder for actual database save
-                pass
+            # Save to database
+            self.database.save_extension(extension.id, {
+                'name': extension.name,
+                'version': extension.version,
+                'status': extension.status,
+                'installed': True,
+                'config': extension.config
+            })
                 
             logger.info(f"Installed extension: {extension.name} (ID: {extension.id})")
             return True, f"Extension installed: {extension.name}", extension
@@ -328,15 +371,25 @@ class ExtensionRegistry:
                 return False, f"Failed to unload extension: {message}"
         
         try:
-            # Remove from registry
+            # Mark as uninstalled in database
+            self.database.update_extension(extension_id, {
+                'installed': False
+            })
+            
+            # Remove from extension registry
             del self.extensions[extension_id]
             
-            # Remove from database if available
-            if self.database:
-                # Remove extension from database
-                # This is a placeholder for actual database deletion
-                pass
-                
+            # Remove extension directory
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            user_ext_dir = os.path.join(root_dir, '..', 'extensions', extension.name)
+            
+            if os.path.exists(user_ext_dir):
+                try:
+                    shutil.rmtree(user_ext_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to remove extension directory: {e}")
+                    # Continue anyway, the extension is marked as uninstalled in the database
+            
             logger.info(f"Uninstalled extension: {extension.name} (ID: {extension_id})")
             return True, f"Extension uninstalled: {extension.name}"
             
