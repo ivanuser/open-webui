@@ -11,6 +11,12 @@ export enum ExtensionType {
   THEME = 'theme'
 }
 
+export interface SidebarConfig {
+  icon: string;
+  label: string;
+  priority?: number;
+}
+
 export interface ExtensionManifest {
   id: string;
   name: string;
@@ -21,13 +27,20 @@ export interface ExtensionManifest {
   homepage?: string;
   repository?: string;
   license?: string;
-  type: ExtensionType | ExtensionType[];
+  type: string | string[];
   icon?: string;
   tags?: string[];
   minAppVersion?: string;
   maxAppVersion?: string;
-  main: string;
+  main?: string;
+  entry_point?: string;
   settings?: ExtensionSetting[];
+  sidebar?: SidebarConfig;
+  routes?: {
+    path: string;
+    component: string;
+  }[];
+  status?: string;
 }
 
 export interface ExtensionSetting {
@@ -53,12 +66,14 @@ export interface Extension {
   settings?: Record<string, any>;
   installDate?: Date;
   updateDate?: Date;
+  status?: string;
 }
 
 export interface ExtensionModule {
-  initialize: () => Promise<void> | void;
-  activate: () => Promise<void> | void;
-  deactivate: () => Promise<void> | void;
+  manifest: ExtensionManifest;
+  initialize: () => Promise<boolean> | boolean;
+  activate: () => Promise<boolean> | boolean;
+  deactivate: () => Promise<boolean> | boolean;
   uninstall?: () => Promise<void> | void;
   getSettings?: () => Record<string, any>;
   updateSettings?: (settings: Record<string, any>) => Promise<void> | void;

@@ -48,7 +48,11 @@ function getMockExtensions(): Extension[] {
         author: "Open WebUI Team",
         type: "ui",
         main: "main.js",
-        entry_point: "__init__.py"
+        entry_point: "__init__.py",
+        sidebar: {
+          icon: "BookOpen",
+          label: "Prompt Library"
+        }
       },
       enabled: true,
       installed: true,
@@ -67,55 +71,72 @@ export async function fetchExtensions(): Promise<Extension[]> {
   extensionsLoading.set(true);
   
   try {
-    // For development and testing, use hardcoded data for now
-    // This avoids HTML parsing errors when the API isn't available
-    console.log('Using mock extension data for development');
-    const mockExtensions = getMockExtensions();
+    // Try fetching from the API first
+    const response = await fetch('/api/admin/extensions');
     
-    // Update the extensions store with mock data
-    const extensionsMap = new Map<string, Extension>();
-    mockExtensions.forEach((ext: Extension) => {
-      extensionsMap.set(ext.manifest.id, ext);
-    });
-    
-    extensions.set(extensionsMap);
-    return mockExtensions;
-    
-    /*
-    // Original code - we'll restore this once the API is fully working
-    const response = await fetch('/api/extensions');
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch extensions: ${response.statusText}`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Extensions from API:', data);
+      
+      // If the response is empty or invalid, fall back to mock data
+      if (!data || !data.extensions || !Array.isArray(data.extensions) || data.extensions.length === 0) {
+        console.log('API returned empty data, using mock extensions');
+        const mockExtensions = getMockExtensions();
+        updateExtensionsStore(mockExtensions);
+        return mockExtensions;
+      }
+      
+      // Update the extensions store with API data
+      updateExtensionsStore(data.extensions);
+      return data.extensions;
+    } else {
+      console.warn(`API returned ${response.status}: ${response.statusText}`);
+      const mockExtensions = getMockExtensions();
+      updateExtensionsStore(mockExtensions);
+      return mockExtensions;
     }
-    
-    const data = await response.json();
-    
-    // Update the extensions store
-    const extensionsMap = new Map<string, Extension>();
-    data.extensions.forEach((ext: Extension) => {
-      extensionsMap.set(ext.manifest.id, ext);
-    });
-    
-    extensions.set(extensionsMap);
-    return data.extensions;
-    */
   } catch (error) {
     console.error('Error fetching extensions:', error);
     // Return mock data if the API call fails
     const mockExtensions = getMockExtensions();
-    
-    // Update the extensions store with mock data
-    const extensionsMap = new Map<string, Extension>();
-    mockExtensions.forEach((ext: Extension) => {
-      extensionsMap.set(ext.manifest.id, ext);
-    });
-    
-    extensions.set(extensionsMap);
+    updateExtensionsStore(mockExtensions);
     return mockExtensions;
   } finally {
     extensionsLoading.set(false);
   }
+}
+
+/**
+ * Helper to update the extensions store
+ */
+function updateExtensionsStore(extensionsList: Extension[]) {
+  const extensionsMap = new Map<string, Extension>();
+  extensionsList.forEach((ext: Extension) => {
+    extensionsMap.set(ext.manifest.id, ext);
+  });
+  extensions.set(extensionsMap);
+}
+
+/**
+ * Create sidebar navigation items from extensions
+ */
+export function getSidebarNavItems() {
+  const items = [];
+  const extensionsMap = get(extensions);
+  
+  for (const [id, extension] of extensionsMap.entries()) {
+    if (extension.enabled && extension.manifest.sidebar) {
+      items.push({
+        id: `extension-${id}`,
+        label: extension.manifest.sidebar.label || extension.manifest.name,
+        icon: extension.manifest.sidebar.icon || 'PuzzlePiece',
+        href: `/extensions/${id}`,
+        type: 'extension'
+      });
+    }
+  }
+  
+  return items;
 }
 
 /**
@@ -148,65 +169,6 @@ export async function loadExtension(extensionId: string): Promise<boolean> {
   
   try {
     console.log(`Loading extension: ${extensionId}`);
-    
-    // For development, simulate successful loading
-    // We'll add proper extension loading later
-    /*
-    // Load the extension module
-    // This assumes the extension main file is served from /extensions/{id}/main.js
-    if (browser) {
-      const module = await import(`/extensions/${extensionId}/${extension.manifest.main}`);
-      
-      // Get the default export (the extension class)
-      const ExtensionClass = module.default;
-      
-      if (!ExtensionClass) {
-        throw new Error(`Extension ${extensionId} does not export a default class`);
-      }
-      
-      // Instantiate the extension
-      const instance: ExtensionModule = new ExtensionClass(extension.manifest);
-      
-      // Store the module
-      extensionModules.update(modules => {
-        modules.set(extensionId, instance);
-        return modules;
-      });
-      
-      // Create a registration
-      const registration: ExtensionRegistration = {
-        id: extensionId,
-        hooks: [],
-        module: instance
-      };
-      
-      // Add hooks from the class (if using decorators)
-      if (ExtensionClass._hooks) {
-        registration.hooks = ExtensionClass._hooks;
-        
-        // Register hooks
-        for (const hook of registration.hooks) {
-          HookRegistry.register(extensionId, hook);
-        }
-      }
-      
-      // Store the registration
-      extensionRegistrations.update(regs => {
-        regs.set(extensionId, registration);
-        return regs;
-      });
-      
-      // Initialize the extension
-      await instance.initialize();
-      
-      // Activate the extension
-      if (extension.enabled) {
-        await instance.activate();
-      }
-      
-      return true;
-    }
-    */
     
     // For development, simulate a mock extension module
     const mockModule: ExtensionModule = {
@@ -283,23 +245,27 @@ export async function loadAllExtensions(): Promise<void> {
  */
 export async function enableExtension(extensionId: string): Promise<boolean> {
   try {
-    // For development, just update the local state
-    // We'll add proper API calls later
-    /*
-    const response = await fetch(`/api/extensions/${extensionId}/enable`, {
-      method: 'POST'
+    // Make API call to enable extension
+    const response = await fetch(`/api/admin/extensions/${extensionId}/enable`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'enable' })
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to enable extension: ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      console.error('Error enabling extension:', errorData || response.statusText);
+      throw new Error(errorData?.error || `Failed to enable extension: ${response.statusText}`);
     }
-    */
     
     // Update local state
     extensions.update(exts => {
       const ext = exts.get(extensionId);
       if (ext) {
         ext.enabled = true;
+        ext.status = "enabled";
         exts.set(extensionId, ext);
       }
       return exts;
@@ -321,23 +287,27 @@ export async function enableExtension(extensionId: string): Promise<boolean> {
  */
 export async function disableExtension(extensionId: string): Promise<boolean> {
   try {
-    // For development, just update the local state
-    // We'll add proper API calls later
-    /*
-    const response = await fetch(`/api/extensions/${extensionId}/disable`, {
-      method: 'POST'
+    // Make API call to disable extension
+    const response = await fetch(`/api/admin/extensions/${extensionId}/enable`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action: 'disable' })
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to disable extension: ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      console.error('Error disabling extension:', errorData || response.statusText);
+      throw new Error(errorData?.error || `Failed to disable extension: ${response.statusText}`);
     }
-    */
     
     // Update local state
     extensions.update(exts => {
       const ext = exts.get(extensionId);
       if (ext) {
         ext.enabled = false;
+        ext.status = "disabled";
         exts.set(extensionId, ext);
       }
       return exts;
@@ -365,8 +335,22 @@ export async function disableExtension(extensionId: string): Promise<boolean> {
  */
 export async function installExtension(manifest: ExtensionManifest, fileData: ArrayBuffer): Promise<boolean> {
   try {
-    // For development, simulate a successful installation
-    console.log('Installing extension (development mock):', manifest);
+    // Create FormData with the extension zip file and manifest
+    const formData = new FormData();
+    formData.append('manifest', JSON.stringify(manifest));
+    formData.append('file', new Blob([fileData], { type: 'application/zip' }), 'extension.zip');
+    
+    // Make API call to install extension
+    const response = await fetch('/api/admin/extensions/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      console.error('Error installing extension:', errorData || response.statusText);
+      throw new Error(errorData?.error || `Failed to install extension: ${response.statusText}`);
+    }
     
     // Add the extension to the store
     const newExtension: Extension = {
@@ -385,29 +369,6 @@ export async function installExtension(manifest: ExtensionManifest, fileData: Ar
     });
     
     return true;
-    
-    /*
-    // Original code
-    // Create FormData with the extension zip file and manifest
-    const formData = new FormData();
-    formData.append('manifest', JSON.stringify(manifest));
-    formData.append('file', new Blob([fileData], { type: 'application/zip' }), 'extension.zip');
-    
-    const response = await fetch('/api/extensions/install', {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `Failed to install extension: ${response.statusText}`);
-    }
-    
-    // Refresh the extensions list
-    await fetchExtensions();
-    
-    return true;
-    */
   } catch (error) {
     console.error('Error installing extension:', error);
     throw error;
@@ -448,18 +409,16 @@ export async function uninstallExtension(extensionId: string): Promise<boolean> 
       return regs;
     });
     
-    // For development, just update the local state
-    // We'll add proper API calls later
-    /*
     // Call API to uninstall
-    const response = await fetch(`/api/extensions/${extensionId}/uninstall`, {
+    const response = await fetch(`/api/admin/extensions/${extensionId}`, {
       method: 'DELETE'
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to uninstall extension: ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      console.error('Error uninstalling extension:', errorData || response.statusText);
+      throw new Error(errorData?.error || `Failed to uninstall extension: ${response.statusText}`);
     }
-    */
     
     // Update local state
     extensions.update(exts => {
@@ -481,10 +440,8 @@ export async function uninstallExtension(extensionId: string): Promise<boolean> 
  */
 export async function updateExtensionSettings(extensionId: string, settings: Record<string, any>): Promise<boolean> {
   try {
-    // For development, just update the local state
-    // We'll add proper API calls later
-    /*
-    const response = await fetch(`/api/extensions/${extensionId}/settings`, {
+    // Make API call to update settings
+    const response = await fetch(`/api/admin/extensions/${extensionId}/settings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -493,9 +450,10 @@ export async function updateExtensionSettings(extensionId: string, settings: Rec
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to update extension settings: ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      console.error('Error updating extension settings:', errorData || response.statusText);
+      throw new Error(errorData?.error || `Failed to update settings: ${response.statusText}`);
     }
-    */
     
     // Update local state
     extensions.update(exts => {
