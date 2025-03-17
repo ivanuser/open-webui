@@ -217,10 +217,12 @@
       <!-- Logo header -->
       <div class="flex justify-center mb-4">
         <div class="text-center">
+          <!-- Using a direct GitHub Pages URL for the logo to ensure it's accessible -->
           <img 
-            src="/images/marketplace/extensplace-logo.png" 
+            src="https://ivanuser.github.io/open-webui-extension-marketplace/assets/images/extensplace-logo.png" 
             alt="Open-WebUI Extensplace" 
             class="w-48 h-auto mx-auto" 
+            onerror="this.onerror=null; this.src='/images/marketplace/logo-fallback.png';"
           />
           <h1 class="text-2xl font-bold mt-2 bg-gradient-to-r from-red-500 to-orange-500 text-transparent bg-clip-text">
             Open-WebUI Extensplace
@@ -286,6 +288,13 @@
             {/each}
           </div>
         </div>
+      </div>
+      
+      <!-- API Health Check Debug Section (temporary) -->
+      <div class="p-4 border rounded bg-gray-50 dark:bg-gray-800 text-sm">
+        <h3 class="font-medium mb-2">API Health Check</h3>
+        <a href="/api/health" target="_blank" class="text-blue-600 hover:underline">Test API Health Endpoint</a>
+        <p class="mt-2 text-gray-500">Click this link to check if the API is working. If you see JSON data, the API is functioning.</p>
       </div>
       
       <!-- Featured extensions when no search/filter -->
