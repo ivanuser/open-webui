@@ -40,6 +40,28 @@ export async function GET({ request }) {
                         } catch (e) {
                             console.error(`Error parsing sidebar.json for extension ${extension}:`, e);
                         }
+                    } else {
+                        // Check for extension.json with sidebar property if sidebar.json doesn't exist
+                        const extensionJsonPath = path.join(extensionPath, 'extension.json');
+                        if (fs.existsSync(extensionJsonPath)) {
+                            try {
+                                const extensionData = JSON.parse(fs.readFileSync(extensionJsonPath, 'utf8'));
+                                
+                                // If extension.json has a sidebar property, use it
+                                if (extensionData.sidebar) {
+                                    sidebarItems.push({
+                                        id: `extension-${extensionData.id || extension}`,
+                                        label: extensionData.sidebar.label || extensionData.name || extension,
+                                        icon: extensionData.sidebar.icon || 'PuzzlePiece',
+                                        href: extensionData.sidebar.href || `/extensions/${extensionData.id || extension}`,
+                                        type: 'extension',
+                                        order: extensionData.sidebar.order || 100
+                                    });
+                                }
+                            } catch (e) {
+                                console.error(`Error parsing extension.json for extension ${extension}:`, e);
+                            }
+                        }
                     }
                 }
             }
