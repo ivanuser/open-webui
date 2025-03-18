@@ -396,6 +396,7 @@
 	};
 
 	onMount(async () => {
+		// Apply theme on mount
 		if (typeof window !== 'undefined' && window.applyTheme) {
 			window.applyTheme();
 		}
@@ -441,6 +442,14 @@
 		handleVisibilityChange();
 
 		theme.set(localStorage.theme);
+
+		// Subscribe to theme changes and apply them
+		theme.subscribe((value) => {
+			localStorage.theme = value;
+			if (typeof window !== 'undefined' && window.applyTheme) {
+				window.applyTheme();
+			}
+		});
 
 		mobile.set(window.innerWidth < BREAKPOINT);
 
