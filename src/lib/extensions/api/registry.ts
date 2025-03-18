@@ -35,6 +35,11 @@ export const extensionsLoading = writable<boolean>(false);
 export const extensionErrors = writable<Map<string, string>>(new Map());
 
 /**
+ * Store for sidebar items
+ */
+export const sidebarItems = writable<any[]>([]);
+
+/**
  * Get mock extensions for development and testing
  */
 function getMockExtensions(): Extension[] {
@@ -118,73 +123,52 @@ function updateExtensionsStore(extensionsList: Extension[]) {
 }
 
 /**
+ * Fetch sidebar items from the server
+ */
+export async function fetchSidebarItems(): Promise<any[]> {
+  try {
+    const response = await fetch('/api/extensions/sidebar');
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data && data.items && Array.isArray(data.items)) {
+        sidebarItems.set(data.items);
+        return data.items;
+      }
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error fetching sidebar items:', error);
+    return [];
+  }
+}
+
+/**
  * Create sidebar navigation items from extensions
  */
 export function getSidebarNavItems() {
-  const items = [];
+  const items = get(sidebarItems) || [];
   
-  try {
-    // First check for extensions that have a sidebar.json file
-    if (browser) {
-      // Look in each extension directory for sidebar.json
-      const extensionDirs = ['prompt-library']; // This would ideally be fetched from the server
+  // Also add any extensions from the store that have sidebar metadata
+  const extensionsMap = get(extensions);
+  
+  for (const [id, extension] of extensionsMap.entries()) {
+    if (extension.enabled && extension.manifest.sidebar) {
+      // Check if this extension is already in items
+      const exists = items.some(item => item.id === `extension-${id}`);
       
-      for (const extId of extensionDirs) {
-        try {
-          // Try to dynamically import the sidebar.json file
-          // Since we can't dynamically import JSON files, we'll make an API call instead
-          fetch(`/extensions/${extId}/sidebar.json`)
-            .then(response => {
-              if (response.ok) {
-                return response.json();
-              }
-              return null;
-            })
-            .then(data => {
-              if (data) {
-                items.push({
-                  id: `extension-${data.id}`,
-                  label: data.label,
-                  icon: data.icon || 'PuzzlePiece',
-                  href: data.href || `/extensions/${data.id}`,
-                  type: 'extension'
-                });
-                
-                // Force update of sidebar
-                const event = new CustomEvent('extension-sidebar-updated', { detail: items });
-                window.dispatchEvent(event);
-              }
-            })
-            .catch(error => {
-              console.error(`Error loading sidebar.json for extension ${extId}:`, error);
-            });
-        } catch (error) {
-          console.error(`Error loading sidebar for extension ${extId}:`, error);
-        }
+      if (!exists) {
+        items.push({
+          id: `extension-${id}`,
+          label: extension.manifest.sidebar.label || extension.manifest.name,
+          icon: extension.manifest.sidebar.icon || 'PuzzlePiece',
+          href: `/extensions/${id}`,
+          type: 'extension'
+        });
       }
     }
-    
-    // Then add any extensions from the store that have sidebar metadata
-    const extensionsMap = get(extensions);
-    
-    for (const [id, extension] of extensionsMap.entries()) {
-      if (extension.enabled && extension.manifest.sidebar) {
-        // Check if this extension is already in items
-        const exists = items.some(item => item.id === `extension-${id}`);
-        
-        if (!exists) {
-          items.push({
-            id: `extension-${id}`,
-            label: extension.manifest.sidebar.label || extension.manifest.name,
-            icon: extension.manifest.sidebar.icon || 'PuzzlePiece',
-            href: `/extensions/${id}`,
-            type: 'extension'
-          });
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting sidebar nav items:', error);
   }
   
   return items;
@@ -265,6 +249,9 @@ export async function loadExtension(extensionId: string): Promise<boolean> {
       await mockModule.activate();
     }
     
+    // Refresh sidebar items
+    await fetchSidebarItems();
+    
     return true;
   } catch (error) {
     console.error(`Failed to load extension ${extensionId}:`, error);
@@ -288,6 +275,9 @@ export async function loadAllExtensions(): Promise<void> {
       await loadExtension(extension.manifest.id);
     }
   }
+  
+  // Load sidebar items
+  await fetchSidebarItems();
 }
 
 /**
@@ -324,6 +314,9 @@ export async function enableExtension(extensionId: string): Promise<boolean> {
     
     // Load the extension
     await loadExtension(extensionId);
+    
+    // Refresh sidebar items
+    await fetchSidebarItems();
     
     return true;
   } catch (error) {
@@ -372,6 +365,9 @@ export async function disableExtension(extensionId: string): Promise<boolean> {
       await module.deactivate();
     }
     
+    // Refresh sidebar items
+    await fetchSidebarItems();
+    
     return true;
   } catch (error) {
     console.error('Error disabling extension:', error);
@@ -418,6 +414,9 @@ export async function installExtension(manifest: ExtensionManifest, fileData: Ar
       exts.set(manifest.id, newExtension);
       return exts;
     });
+    
+    // Refresh sidebar items
+    await fetchSidebarItems();
     
     return true;
   } catch (error) {
@@ -476,6 +475,9 @@ export async function uninstallExtension(extensionId: string): Promise<boolean> 
       exts.delete(extensionId);
       return exts;
     });
+    
+    // Refresh sidebar items
+    await fetchSidebarItems();
     
     return true;
   } catch (error) {

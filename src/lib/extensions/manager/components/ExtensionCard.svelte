@@ -35,19 +35,31 @@
     
     try {
       if (isEnabled) {
-        // Client-side mock
-        isEnabled = false;
-        extension.enabled = false;
-        extension.status = "disabled";
-        toast.success(`Extension "${extension.manifest.name}" disabled`);
-        dispatch('disable', { id: extension.manifest.id });
+        // Actually call the API
+        const success = await disableExtension(extension.manifest.id);
+        
+        if (success) {
+          isEnabled = false;
+          extension.enabled = false;
+          extension.status = "disabled";
+          toast.success(`Extension "${extension.manifest.name}" disabled`);
+          dispatch('disable', { id: extension.manifest.id });
+        } else {
+          toast.error(`Failed to disable extension "${extension.manifest.name}"`);
+        }
       } else {
-        // Client-side mock
-        isEnabled = true;
-        extension.enabled = true;
-        extension.status = "enabled";
-        toast.success(`Extension "${extension.manifest.name}" enabled`);
-        dispatch('enable', { id: extension.manifest.id });
+        // Actually call the API
+        const success = await enableExtension(extension.manifest.id);
+        
+        if (success) {
+          isEnabled = true;
+          extension.enabled = true;
+          extension.status = "enabled";
+          toast.success(`Extension "${extension.manifest.name}" enabled`);
+          dispatch('enable', { id: extension.manifest.id });
+        } else {
+          toast.error(`Failed to enable extension "${extension.manifest.name}"`);
+        }
       }
     } catch (error) {
       console.error('Error toggling extension:', error);
@@ -65,9 +77,15 @@
     loading = true;
     
     try {
-      // Client-side mock
-      toast.success(`Extension "${extension.manifest.name}" uninstalled`);
-      dispatch('uninstall', { id: extension.manifest.id });
+      // Actually call the API
+      const success = await uninstallExtension(extension.manifest.id);
+      
+      if (success) {
+        toast.success(`Extension "${extension.manifest.name}" uninstalled`);
+        dispatch('uninstall', { id: extension.manifest.id });
+      } else {
+        toast.error(`Failed to uninstall extension "${extension.manifest.name}"`);
+      }
     } catch (error) {
       console.error('Error uninstalling extension:', error);
       toast.error(`Failed to uninstall extension: ${error.message || 'Unknown error'}`);

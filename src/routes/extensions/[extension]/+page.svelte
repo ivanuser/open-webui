@@ -19,19 +19,19 @@
       loading = true;
       
       // Try to dynamically import the main component
-      const componentModule = await import(`/extensions/${extensionId}/${extensionId}.svelte`).catch(async () => {
+      const componentModule = await import(`/static-extensions/${extensionId}/${extensionId}.svelte`).catch(async () => {
         // If not found, try other common filenames
         try {
-          return await import(`/extensions/${extensionId}/index.svelte`);
+          return await import(`/static-extensions/${extensionId}/index.svelte`);
         } catch (e) {
           try {
-            return await import(`/extensions/${extensionId}/PromptLibrary.svelte`);
+            return await import(`/static-extensions/${extensionId}/PromptLibrary.svelte`);
           } catch (e) {
             try {
-              return await import(`/extensions/${extensionId}/App.svelte`);
+              return await import(`/static-extensions/${extensionId}/App.svelte`);
             } catch (e) {
               try {
-                return await import(`/extensions/${extensionId}/Main.svelte`);
+                return await import(`/static-extensions/${extensionId}/Main.svelte`);
               } catch (e) {
                 return null;
               }
