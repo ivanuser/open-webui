@@ -35,7 +35,7 @@ const getMCPServersFromStorage = () => {
 			name: 'Filesystem Server',
 			type: 'filesystem',
 			command: 'node',
-			args: ['mcp_filesystem_server.js', '/home/ihoner'],
+			args: ['standalone_mcp_filesystem_server.js', '/home/ihoner'],
 			status: 'disconnected',
 			description: 'Secure file operations with configurable access controls'
 		}

@@ -48,7 +48,7 @@ export async function connectToMCPServer(server) {
     if (server.type === 'filesystem' || server.type === 'filesystem-py') {
         const scriptPath = server.type === 'filesystem-py' 
             ? 'filesystem_mcp_server.py' 
-            : 'mcp_filesystem_server.js';
+            : 'standalone_mcp_filesystem_server.js';
         
         const isPython = scriptPath.endsWith('.py');
         const command = isPython ? 'python' : 'node';
