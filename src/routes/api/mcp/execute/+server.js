@@ -38,7 +38,7 @@ export async function POST({ request }) {
                 name: 'Filesystem Server',
                 type: 'filesystem',
                 command: 'node',
-                args: ['mcp_filesystem_server.js', '/home/ihoner'],
+                args: ['standalone_mcp_filesystem_server.js', '/home/ihoner'],
                 status: 'connected'
             }
         ];
@@ -52,8 +52,8 @@ export async function POST({ request }) {
         let result;
         
         if (server.type === 'filesystem') {
-            // For filesystem, use direct execution with our existing implementation
-            result = await executeToolCall(server, tool, args);
+            // Use our standalone filesystem server
+            result = await executeStandaloneToolCall(server, tool, args);
         } else if (server.type === 'filesystem-py') {
             // For Python filesystem, use the Python server
             result = await executePythonToolCall(server, tool, args);
@@ -72,13 +72,13 @@ export async function POST({ request }) {
 }
 
 /**
- * Execute a tool call with our JavaScript MCP server
+ * Execute a tool call with our standalone MCP server
  */
-async function executeToolCall(server, tool, args) {
+async function executeStandaloneToolCall(server, tool, args) {
     return new Promise((resolve, reject) => {
         try {
             // Find the script path relative to the project root
-            const scriptPath = path.resolve(process.cwd(), 'mcp_filesystem_server.js');
+            const scriptPath = path.resolve(process.cwd(), 'standalone_mcp_filesystem_server.js');
             
             // Ensure the script exists
             if (!fs.existsSync(scriptPath)) {
