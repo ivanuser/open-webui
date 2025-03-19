@@ -6,10 +6,16 @@
  * tools for working with the filesystem.
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { existsSync, statSync, readdirSync } = require('fs');
-const { FastMCP } = require('@modelcontextprotocol/server');
+import fs from 'fs/promises';
+import path from 'path';
+import { existsSync, statSync, readdirSync } from 'fs';
+import { FastMCP } from '@modelcontextprotocol/server';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get the current file's directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Parse command line arguments for allowed directories
 const allowedDirs = process.argv.slice(2).map(dir => path.resolve(dir));
@@ -51,6 +57,15 @@ function formatTimestamp(timestamp) {
 
 // Tool: Read a file
 mcp.tool('read_file', async ({ path: filePath }) => {
+    // Handle path parameter that might be passed as an object
+    if (typeof filePath === 'object') {
+        filePath = filePath.path || '';
+    }
+    
+    if (!filePath) {
+        return 'Error: No path provided';
+    }
+    
     if (!isPathAllowed(filePath)) {
         return `Error: Access to ${filePath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
     }
@@ -86,6 +101,16 @@ mcp.tool('read_multiple_files', async ({ paths }) => {
 
 // Tool: Write to a file
 mcp.tool('write_file', async ({ path: filePath, content }) => {
+    // Handle path parameter that might be passed as an object
+    if (typeof filePath === 'object') {
+        filePath = filePath.path || '';
+        content = filePath.content || '';
+    }
+    
+    if (!filePath) {
+        return 'Error: No path provided';
+    }
+    
     if (!isPathAllowed(filePath)) {
         return `Error: Access to ${filePath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
     }
@@ -105,6 +130,15 @@ mcp.tool('write_file', async ({ path: filePath, content }) => {
 
 // Tool: Create a directory
 mcp.tool('create_directory', async ({ path: dirPath }) => {
+    // Handle path parameter that might be passed as an object
+    if (typeof dirPath === 'object') {
+        dirPath = dirPath.path || '';
+    }
+    
+    if (!dirPath) {
+        return 'Error: No path provided';
+    }
+    
     if (!isPathAllowed(dirPath)) {
         return `Error: Access to ${dirPath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
     }
@@ -225,10 +259,7 @@ mcp.tool('search_files', async ({ path: dirPath, pattern }) => {
     // Handle parameters that might be passed as objects
     if (typeof dirPath === 'object') {
         dirPath = dirPath.path || '';
-    }
-    
-    if (typeof pattern === 'object') {
-        pattern = pattern.pattern || '';
+        pattern = dirPath.pattern || '';
     }
     
     if (!dirPath) {
@@ -416,8 +447,23 @@ if (process.stdin.isTTY) {
                 } catch (error) {
                     console.error('\nError executing tool:', error);
                 }
+            } else if (input.method === 'listTools') {
+                // Handle list tools request
+                console.log('\nAvailable tools:');
+                const tools = Object.entries(mcp.tools).map(([name, fn]) => {
+                    return {
+                        name,
+                        description: fn.description || 'No description available'
+                    };
+                });
+                
+                console.log(JSON.stringify({
+                    jsonrpc: "2.0",
+                    result: { tools },
+                    id: input.id
+                }));
             } else {
-                console.log('Unknown method. Use "callTool".');
+                console.log('Unknown method. Use "callTool" or "listTools".');
             }
             
             console.log('\nEnter next command (or "exit" to quit):');

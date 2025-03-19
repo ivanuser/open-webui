@@ -1,27 +1,21 @@
 #!/usr/bin/env node
 /**
- * MCP Server Test Script
+ * MCP Server Test Script (CommonJS version)
  * 
  * This script tests the MCP server by directly sending tool calls.
  * It's useful for debugging and testing the MCP server outside of the web UI.
  */
 
-import { spawn } from 'child_process';
-import path from 'path';
-import readline from 'readline';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-// Get the current file's directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const { spawn } = require('child_process');
+const path = require('path');
+const readline = require('readline');
 
 // Get the path to the MCP server script from the command line
 const serverScript = process.argv[2] || './mcp_filesystem_server.js';
 const allowedPath = process.argv[3] || '/home/ihoner';
 
 if (!serverScript) {
-  console.error('Usage: node test_mcp_server.js <server_script> [allowed_path]');
+  console.error('Usage: node test_mcp_server.cjs <server_script> [allowed_path]');
   process.exit(1);
 }
 
@@ -203,7 +197,7 @@ async function startInteractiveTesting() {
     
     // Start the interactive loop
     console.log('\nInteractive MCP testing. Enter commands in the format: tool_name args_json');
-    console.log('Example: list_directory {"path":"/home/ihoner"}');
+    console.log('Example: list_directory {"path":"' + allowedPath + '"}');
     console.log('Enter "exit" to quit.');
     
     const promptUser = () => {
