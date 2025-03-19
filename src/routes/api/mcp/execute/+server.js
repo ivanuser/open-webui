@@ -19,8 +19,13 @@ export async function POST({ request, locals }) {
     // Get the user's token from locals or request headers
     const token = locals.token || request.headers.get('authorization')?.replace('Bearer ', '');
     
+    console.log(`Received request to execute tool: ${tool} on server: ${serverId}`);
+    console.log(`Request data:`, data);
+    console.log(`Extracted token: ${token}`);
+    
     try {
         if (!serverId || !tool) {
+            console.error('Missing required parameters');
             return json({ error: 'Missing required parameters' }, { status: 400 });
         }
         
@@ -28,6 +33,9 @@ export async function POST({ request, locals }) {
         // For now, use localStorage data that's stored in the API handler
         const mcpServerRegistry = global.mcpServerRegistry || {};
         const mcpServers = mcpServerRegistry[token] || [];
+        
+        console.log(`MCP Server Registry:`, mcpServerRegistry);
+        console.log(`MCP Servers for token (${token}):`, mcpServers);
         
         if (mcpServers.length === 0) {
             // If no servers found in registry, use default hardcoded servers
@@ -40,6 +48,8 @@ export async function POST({ request, locals }) {
                 args: ['standalone_mcp_filesystem_server.js', '/home/ihoner'],
                 status: 'connected'
             });
+            console.log("Default MCP Servers:", mcpServers);
+
         } else {
             console.log(`Found ${mcpServers.length} MCP servers in registry for token`);
         }
@@ -47,9 +57,11 @@ export async function POST({ request, locals }) {
         // Find the server by ID
         const server = mcpServers.find(s => s.id === serverId);
         if (!server) {
+            console.error(`MCP server ${serverId} not found`);
             return json({ error: `MCP server ${serverId} not found` }, { status: 404 });
         }
         
+        console.log(`Found server:`, server);
         console.log(`Executing tool ${tool} on MCP server ${server.name} (${server.type})`);
         console.log(`Tool arguments:`, args);
         
@@ -66,6 +78,7 @@ export async function POST({ request, locals }) {
             // For memory server, implement a similar execution function
             result = await executeMemoryToolCall(server, tool, args);
         } else {
+            console.error(`Unsupported MCP server type: ${server.type}`);
             return json({ error: `Unsupported MCP server type: ${server.type}` }, { status: 400 });
         }
         
@@ -88,6 +101,7 @@ async function executeStandaloneToolCall(server, tool, args) {
             // Find the script path relative to the project root
             const scriptPath = path.resolve(process.cwd(), 'standalone_mcp_filesystem_server.js');
             
+            console.log(`Checking for MCP server script at: ${scriptPath}`);
             // Ensure the script exists
             if (!fs.existsSync(scriptPath)) {
                 console.error(`MCP server script not found at ${scriptPath}`);
@@ -116,17 +130,21 @@ async function executeStandaloneToolCall(server, tool, args) {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
             
+            console.log(`MCP server process spawned with PID: ${serverProcess.pid}`);
+            
             let stdout = '';
             let stderr = '';
             
             serverProcess.stdout.on('data', (data) => {
-                console.log(`MCP stdout: ${data.toString().trim()}`);
-                stdout += data.toString();
+                const dataString = data.toString().trim();
+                console.log(`MCP stdout: ${dataString}`);
+                stdout += dataString;
             });
             
             serverProcess.stderr.on('data', (data) => {
-                console.error(`MCP stderr: ${data.toString().trim()}`);
-                stderr += data.toString();
+                const dataString = data.toString().trim();
+                console.error(`MCP stderr: ${dataString}`);
+                stderr += dataString;
             });
             
             serverProcess.on('error', (error) => {
@@ -135,6 +153,7 @@ async function executeStandaloneToolCall(server, tool, args) {
             });
             
             serverProcess.on('close', (code) => {
+                console.log(`MCP server process exited with code ${code}`);
                 if (code !== 0) {
                     console.error(`MCP server process exited with code ${code}`);
                     console.error('stderr:', stderr);
@@ -186,6 +205,7 @@ async function executeStandaloneToolCall(server, tool, args) {
                         console.log(`Using raw stdout as result: ${resultText.substring(0, 100)}...`);
                     }
                     
+                    console.log(`Resolved resultText: ${resultText}`);
                     resolve(resultText || `Executed ${tool} successfully but no output was returned`);
                 } catch (error) {
                     console.error('Error parsing MCP server response:', error);
@@ -197,6 +217,8 @@ async function executeStandaloneToolCall(server, tool, args) {
             console.log(`Sending tool call request: ${toolCallData}`);
             serverProcess.stdin.write(toolCallData + '\n');
             serverProcess.stdin.end();
+            console.log(`Tool call request sent and stdin ended.`);
+
         } catch (error) {
             console.error('Error in executeStandaloneToolCall:', error);
             reject(error);
