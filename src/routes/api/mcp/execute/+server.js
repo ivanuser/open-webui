@@ -69,7 +69,9 @@ export async function POST({ request, locals }) {
             return json({ error: `Unsupported MCP server type: ${server.type}` }, { status: 400 });
         }
         
-        console.log(`Tool result:`, result);
+        console.log(`Tool result (detailed):`, JSON.stringify(result, null, 2));
+        console.log(`Tool type:`, typeof result);
+        console.log(`Tool result keys:`, Object.keys(result || {}));
         return json({ result });
     } catch (error) {
         console.error('Error executing MCP tool:', error);
@@ -146,6 +148,18 @@ async function executeStandaloneToolCall(server, tool, args) {
                     const responseLines = stdout.split('\n').filter(line => line.trim());
                     let resultText = '';
                     
+                    // Add these debugging lines:
+                    console.log(`Raw response lines (${responseLines.length}):`);
+                    responseLines.forEach((line, index) => {
+                        console.log(`[Line ${index}]: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`);
+                        try {
+                            const parsed = JSON.parse(line);
+                            console.log(`[Line ${index} parsed]:`, JSON.stringify(parsed, null, 2).substring(0, 200));
+                        } catch (e) {
+                            console.log(`[Line ${index} parse failed]: ${e.message}`);
+                        }
+                    });
+                    
                     for (const line of responseLines) {
                         try {
                             const parsed = JSON.parse(line);
@@ -153,10 +167,11 @@ async function executeStandaloneToolCall(server, tool, args) {
                                 // This is a response to our tool call
                                 if (parsed.result.content && parsed.result.content.length > 0) {
                                     resultText = parsed.result.content[0].text;
+                                    console.log(`Found result in response content: ${resultText.substring(0, 100)}...`);
                                 } else {
                                     resultText = JSON.stringify(parsed.result);
+                                    console.log(`Found result without content: ${resultText.substring(0, 100)}...`);
                                 }
-                                console.log(`Found result in response: ${resultText.substring(0, 100)}...`);
                                 break;
                             }
                         } catch (e) {
@@ -168,6 +183,7 @@ async function executeStandaloneToolCall(server, tool, args) {
                     // If we didn't find a valid response, use the entire output
                     if (!resultText && stdout.trim()) {
                         resultText = stdout.trim();
+                        console.log(`Using raw stdout as result: ${resultText.substring(0, 100)}...`);
                     }
                     
                     resolve(resultText || `Executed ${tool} successfully but no output was returned`);
