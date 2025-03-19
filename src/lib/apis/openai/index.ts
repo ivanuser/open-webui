@@ -1,5 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-import { getMCPTools, processToolCall } from '$lib/apis/mcp';
+import { getMCPTools, processMCPModelResponse } from '$lib/components/chat/MCPHandler';
 import { mcpServers, settings } from '$lib/stores';
 import { get } from 'svelte/store';
 
@@ -333,10 +333,10 @@ export const verifyOpenAIConnection = async (
 };
 
 /**
- * Check if MCP is enabled and should be included in requests
- * @returns {boolean} True if MCP is enabled
+ * Get the active MCP server
+ * @returns {Object|null} The active MCP server or null
  */
-function isMCPEnabled() {
+export function getActiveMCPServer() {
     const currentSettings = get(settings);
     const servers = get(mcpServers) || [];
     
@@ -344,11 +344,12 @@ function isMCPEnabled() {
     const defaultServerId = currentSettings?.defaultMcpServer;
     
     if (defaultServerId) {
-        return servers.some(s => s.id === defaultServerId && s.status === 'connected');
+        const server = servers.find(s => s.id === defaultServerId && s.status === 'connected');
+        if (server) return server;
     }
     
-    // If no default, check if any server is connected
-    return servers.some(s => s.status === 'connected');
+    // If no default, use the first connected server
+    return servers.find(s => s.status === 'connected') || null;
 }
 
 /**
@@ -357,20 +358,59 @@ function isMCPEnabled() {
  * @returns {object} Updated request data with MCP tools if needed
  */
 function addMCPToolsToRequest(requestData: any) {
-    // Check if MCP is enabled
-    if (!isMCPEnabled()) {
+    // Get active MCP server
+    const server = getActiveMCPServer();
+    if (!server) {
         return requestData;
     }
     
-    // Get MCP tools
-    const mcpTools = getMCPTools();
-    
+    // Get MCP tools for this server
+    const mcpTools = getMCPTools(server.type);
     if (!mcpTools || mcpTools.length === 0) {
         return requestData;
     }
     
+    // Add MCP system message to request
+    let messages = [...requestData.messages];
+    const sysMessage = `You have access to external tools through MCP (Model Context Protocol). 
+    
+For filesystem operations, you can use these tools:
+- list_directory: Lists files and directories
+- read_file: Gets contents of a file
+- write_file: Creates or updates a file
+- create_directory: Makes new directories
+- search_files: Finds files matching a pattern
+- get_file_info: Shows file metadata
+- list_allowed_directories: Shows available directories
+
+When asked about files or directories, use these tools to provide actual filesystem information.`;
+    
+    // Add system message if not already present
+    const hasSystemMessage = messages.some(m => m.role === 'system');
+    if (hasSystemMessage) {
+        // Append to existing system message
+        messages = messages.map(m => {
+            if (m.role === 'system') {
+                return {
+                    ...m,
+                    content: `${m.content}\n\n${sysMessage}`
+                };
+            }
+            return m;
+        });
+    } else {
+        // Add new system message at the beginning
+        messages = [
+            { role: 'system', content: sysMessage },
+            ...messages
+        ];
+    }
+    
     // Add or merge tools
-    const updatedRequest = { ...requestData };
+    const updatedRequest = { 
+        ...requestData,
+        messages
+    };
     
     if (!updatedRequest.tools) {
         updatedRequest.tools = mcpTools;
@@ -383,6 +423,7 @@ function addMCPToolsToRequest(requestData: any) {
         updatedRequest.tool_choice = "auto";
     }
     
+    console.log('Enhanced request with MCP tools:', updatedRequest);
     return updatedRequest;
 }
 
@@ -397,6 +438,8 @@ export const chatCompletion = async (
 	// Add MCP tools to the request if needed
 	const updatedBody = addMCPToolsToRequest(body);
 
+	console.log('Sending chat completion request with body:', JSON.stringify(updatedBody).slice(0, 500) + '...');
+	
 	const res = await fetch(`${url}/chat/completions`, {
 		signal: controller.signal,
 		method: 'POST',
@@ -406,7 +449,7 @@ export const chatCompletion = async (
 		},
 		body: JSON.stringify(updatedBody)
 	}).catch((err) => {
-		console.log(err);
+		console.log('Error in chat completion request:', err);
 		error = err;
 		return null;
 	});
@@ -452,9 +495,27 @@ export const generateOpenAIChatCompletion = async (
 	// Process any tool calls in the response
 	if (res && res.choices && res.choices[0]?.message?.tool_calls) {
 		try {
-			// Handle tool calls (in a real implementation)
-			console.log("Tool calls detected", res.choices[0].message.tool_calls);
-			// We would process tool calls here, but for now just log them
+			// Get active MCP server
+			const server = getActiveMCPServer();
+			if (server) {
+				// Process the tool calls
+				console.log("Tool calls detected, processing:", res.choices[0].message.tool_calls);
+				
+				// Process tool calls and get results
+				const processedMessage = await processMCPModelResponse(
+					token, 
+					res.choices[0].message,
+					server.id
+				);
+				
+				// Update the response with processed message
+				if (processedMessage.toolResults) {
+					console.log("Tool results:", processedMessage.toolResults);
+					
+					// Update the choice with the processed message
+					res.choices[0].message = processedMessage;
+				}
+			}
 		} catch (err) {
 			console.error("Error processing tool calls", err);
 		}

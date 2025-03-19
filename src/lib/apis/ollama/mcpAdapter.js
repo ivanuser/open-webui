@@ -7,9 +7,8 @@
 
 import { get } from 'svelte/store';
 import { mcpServers, settings } from '$lib/stores';
-import { getMCPTools } from '$lib/apis/mcp';
-import { executeMCPTool } from '$lib/apis/mcp/execute';
-import { getMCPSystemPrompt } from '$lib/components/chat/MCPMiddleware';
+import { getMCPTools } from '$lib/components/chat/MCPHandler';
+import { executeMCPToolCall } from '$lib/components/chat/MCPHandler';
 
 /**
  * Check if MCP is enabled and should be included in requests
@@ -31,18 +30,43 @@ export function isMCPEnabled() {
 }
 
 /**
+ * Get active MCP server
+ * @returns {Object|null} The active MCP server or null
+ */
+export function getActiveMCPServer() {
+    const currentSettings = get(settings);
+    const servers = get(mcpServers) || [];
+    
+    // Get default server if it exists and is connected
+    if (currentSettings?.defaultMcpServer) {
+        const server = servers.find(s => 
+            s.id === currentSettings.defaultMcpServer && 
+            s.status === 'connected'
+        );
+        if (server) return server;
+    }
+    
+    // Otherwise, use the first connected server
+    return servers.find(s => s.status === 'connected') || null;
+}
+
+/**
  * Format tools for Ollama API
  * @param {Array} tools - Original tools 
  * @returns {Array} Formatted tools for Ollama
  */
 export function formatToolsForOllama(tools) {
     return tools.map(tool => {
-        // Make sure the tool is in the format Ollama expects
-        return {
-            name: tool.function?.name || tool.name,
-            description: tool.function?.description || tool.description,
-            parameters: tool.function?.parameters || tool.parameters
-        };
+        if (tool.type === 'function') {
+            // Convert OpenAI-style tools to Ollama-style tools
+            return {
+                name: tool.function.name,
+                description: tool.function.description,
+                parameters: tool.function.parameters
+            };
+        }
+        // Already in Ollama format
+        return tool;
     });
 }
 
@@ -57,9 +81,14 @@ export function adaptRequestForOllama(requestData) {
         return requestData;
     }
     
-    // Get MCP tools
-    const mcpTools = getMCPTools();
+    // Get active MCP server
+    const server = getActiveMCPServer();
+    if (!server) {
+        return requestData;
+    }
     
+    // Get MCP tools
+    const mcpTools = getMCPTools(server.type);
     if (!mcpTools || mcpTools.length === 0) {
         return requestData;
     }
@@ -68,24 +97,35 @@ export function adaptRequestForOllama(requestData) {
     const formattedTools = formatToolsForOllama(mcpTools);
     
     // Add MCP system prompt
-    const systemPrompt = getMCPSystemPrompt();
+    const systemPrompt = `You have access to external tools through MCP. 
+    
+For the filesystem, you can use:
+- list_directory: Lists files and directories
+- read_file: Gets contents of a file
+- write_file: Creates or updates a file
+- create_directory: Makes new directories
+- search_files: Finds files matching a pattern
+- get_file_info: Shows file metadata
+- list_allowed_directories: Shows available directories
+
+When asked about files or directories, use these tools to access the real filesystem.`;
+
     let messages = [...(requestData.messages || [])];
     
-    if (systemPrompt) {
-        const systemIndex = messages.findIndex(m => m.role === 'system');
-        if (systemIndex >= 0) {
-            // Append to existing system message
-            messages[systemIndex] = {
-                ...messages[systemIndex],
-                content: `${messages[systemIndex].content}\n\n${systemPrompt}`
-            };
-        } else {
-            // Add new system message
-            messages = [
-                { role: 'system', content: systemPrompt },
-                ...messages
-            ];
-        }
+    // Find or add system message
+    const systemIndex = messages.findIndex(m => m.role === 'system');
+    if (systemIndex >= 0) {
+        // Append to existing system message
+        messages[systemIndex] = {
+            ...messages[systemIndex],
+            content: `${messages[systemIndex].content}\n\n${systemPrompt}`
+        };
+    } else {
+        // Add new system message
+        messages = [
+            { role: 'system', content: systemPrompt },
+            ...messages
+        ];
     }
     
     // Create adapted request
@@ -108,23 +148,12 @@ export async function processOllamaToolCalls(token, response) {
         return response;
     }
     
-    // Get the default MCP server
-    const currentSettings = get(settings);
-    const defaultServerId = currentSettings?.defaultMcpServer;
-    const servers = get(mcpServers) || [];
+    console.log('Processing Ollama tool calls:', response.message.tool_calls);
     
-    let serverId = defaultServerId;
-    
-    // If no default server, use the first connected server
-    if (!serverId) {
-        const connectedServer = servers.find(s => s.status === 'connected');
-        if (connectedServer) {
-            serverId = connectedServer.id;
-        }
-    }
-    
-    if (!serverId) {
-        console.error('No connected MCP server available for tool execution');
+    // Get the active MCP server
+    const server = getActiveMCPServer();
+    if (!server) {
+        console.error('No active MCP server available for tool execution');
         return response;
     }
     
@@ -156,15 +185,11 @@ export async function processOllamaToolCalls(token, response) {
             console.log(`Executing tool ${name} with args:`, args);
             
             // Execute the tool call
-            const result = await executeMCPTool(token, {
-                serverId,
-                tool: name,
-                args
-            });
+            const result = await executeMCPToolCall(token, server.id, name, args);
             
             // Add result to tool results
-            const resultString = typeof result === 'string' ? result : 
-                               (result.result ? result.result : JSON.stringify(result));
+            const resultString = result.result || 
+                              (typeof result === 'string' ? result : JSON.stringify(result));
             
             toolResults.push({
                 tool_call_id: toolCall.id || `call-${Math.random().toString(36).substr(2, 9)}`,
@@ -173,7 +198,7 @@ export async function processOllamaToolCalls(token, response) {
                 content: resultString
             });
             
-            console.log(`Tool ${name} execution result:`, resultString);
+            console.log(`Tool ${name} execution result:`, resultString.substring(0, 100) + '...');
         } catch (error) {
             console.error(`Error executing tool call:`, error);
             

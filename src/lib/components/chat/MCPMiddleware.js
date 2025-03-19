@@ -1,97 +1,15 @@
 /**
  * MCP Middleware
  * 
- * This module provides middleware functions for integrating MCP with the chat component.
- * It handles adding MCP tools to requests, processing responses with tool calls,
- * and managing the conversation flow with MCP.
+ * This component provides middleware functions to integrate MCP with chat.
  */
 
 import { get } from 'svelte/store';
 import { mcpServers, settings } from '$lib/stores';
-import { getMCPTools } from '$lib/apis/mcp';
-import { processToolCalls, constructFollowUpMessages } from './MCPToolCallProcessor';
-import { processStream } from '$lib/utils/streamProcessor';
+import { addMCPCapabilities, processMCPModelResponse, enhanceMessagesWithToolResults } from '$lib/components/chat/MCPHandler';
 
 /**
- * Get the system prompt for MCP
- * @returns {string} System prompt for MCP
- */
-export function getMCPSystemPrompt() {
-    // Get the default MCP server
-    const currentSettings = get(settings);
-    const defaultServerId = currentSettings?.defaultMcpServer;
-    const servers = get(mcpServers) || [];
-    
-    // Get default server if it exists and is connected
-    let server = null;
-    if (defaultServerId) {
-        server = servers.find(s => s.id === defaultServerId && s.status === 'connected');
-    }
-    
-    // If no default server, use the first connected server
-    if (!server) {
-        server = servers.find(s => s.status === 'connected');
-    }
-    
-    if (!server) {
-        return '';
-    }
-    
-    // Generate system prompt based on server type
-    if (server.type === 'filesystem' || server.type === 'filesystem-py') {
-        // Get the allowed path from the server args
-        const allowedPath = server.args?.[server.args.length - 1] || '';
-        
-        // Determine path separator based on path format
-        const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
-        const pathSep = isWindows ? '\\' : '/';
-        
-        return `You have access to a filesystem through the MCP (Model Context Protocol) server. 
-You can interact with files and directories by using function calls when needed.
-
-When working with the filesystem:
-1. Only access paths under: ${allowedPath}
-2. Use ${isWindows ? 'backslashes' : 'forward slashes'} for paths (${pathSep})
-3. Always provide absolute paths starting with ${allowedPath}
-
-Available functions:
-- list_directory(path): Lists files and directories in a directory
-- read_file(path): Reads a file's contents
-- write_file(path, content): Creates or overwrites a file
-- create_directory(path): Creates a directory
-- search_files(path, pattern): Searches for files or directories matching a pattern
-- get_file_info(path): Gets file metadata
-- list_allowed_directories(): Lists directories you have access to
-
-Examples:
-- To see what files are in ${allowedPath}: Use list_directory("${allowedPath}")
-- To read a file: Use read_file("${allowedPath}${pathSep}example.txt")
-- To create a file: Use write_file("${allowedPath}${pathSep}new_file.txt", "content")
-
-When a user asks to see directory contents or read/write files, use these functions.`;
-    } else if (server.type === 'memory') {
-        return `You have access to a persistent memory system through the MCP server.
-You can store and retrieve information across conversations.
-
-Use memory functions when:
-- The user asks you to remember something
-- You need to recall previously stored information
-- The user asks about something you mentioned in a previous conversation
-
-Available functions:
-- store_memory(key, value): Stores information
-- retrieve_memory(key): Retrieves information
-- search_memory(query): Searches across stored memories
-
-When storing information, use descriptive keys that will make the information easy to find later.`;
-    }
-    
-    return `You have access to an MCP server of type ${server.type}.
-When appropriate, you can use the available functions to perform operations with this server.`;
-}
-
-/**
- * Check if MCP is enabled
+ * Check if MCP is enabled for the current user
  * @returns {boolean} True if MCP is enabled
  */
 export function isMCPEnabled() {
@@ -110,97 +28,139 @@ export function isMCPEnabled() {
 }
 
 /**
- * Enhance request options with MCP capabilities
- * @param {object} options - Original request options
- * @returns {object} Enhanced request options
+ * Get the active MCP server
+ * @returns {Object|null} Active MCP server or null
  */
-export function enhanceRequestWithMCP(options) {
-    if (!isMCPEnabled()) {
-        return options;
+export function getActiveMCPServer() {
+    const currentSettings = get(settings);
+    const servers = get(mcpServers) || [];
+    
+    // Get default server if it exists and is connected
+    if (currentSettings?.defaultMcpServer) {
+        const server = servers.find(s => 
+            s.id === currentSettings.defaultMcpServer && 
+            s.status === 'connected'
+        );
+        if (server) return server;
     }
     
-    // Get MCP tools
-    const mcpTools = getMCPTools();
+    // Otherwise, use the first connected server
+    return servers.find(s => s.status === 'connected') || null;
+}
+
+/**
+ * Get the system prompt for the active MCP server
+ * @returns {string} System prompt for MCP
+ */
+export function getMCPSystemPrompt() {
+    const server = getActiveMCPServer();
+    if (!server) return '';
     
-    if (!mcpTools || mcpTools.length === 0) {
-        return options;
-    }
-    
-    // Add system prompt for MCP if not already present
-    let messages = [...options.messages];
-    const systemPrompt = getMCPSystemPrompt();
-    
-    if (systemPrompt) {
-        // Check if there's already a system message
-        const systemMessageIndex = messages.findIndex(msg => msg.role === 'system');
+    if (server.type === 'filesystem' || server.type === 'filesystem-py') {
+        // Get the allowed path from the server args
+        const allowedPath = server.args?.[server.args.length - 1] || '';
         
-        if (systemMessageIndex >= 0) {
-            // Append to existing system message
-            messages[systemMessageIndex] = {
-                ...messages[systemMessageIndex],
-                content: `${messages[systemMessageIndex].content}\n\n${systemPrompt}`
-            };
-        } else {
-            // Add new system message at the beginning
-            messages = [
-                { role: 'system', content: systemPrompt },
-                ...messages
-            ];
-        }
+        // Determine path separator based on path format
+        const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
+        
+        return `You have access to a filesystem through MCP. 
+        
+You can interact with files in: ${allowedPath}
+
+Available tools:
+- list_directory: Lists files and folders
+- read_file: Gets file contents
+- write_file: Creates or updates files
+- create_directory: Makes new folders
+- search_files: Finds files matching a pattern
+- get_file_info: Shows file details
+- list_allowed_directories: Shows accessible folders
+
+When the user asks about files or directories, use these tools to access the actual filesystem and provide real information.`;
+    } else if (server.type === 'memory') {
+        return `You have access to a memory system through MCP.
+
+Available memory tools:
+- store_memory: Saves information
+- retrieve_memory: Gets saved information
+- search_memory: Finds information across all memories
+
+Use these when appropriate to remember user information.`;
     }
     
-    // Add or merge tools
-    const updatedOptions = { 
-        ...options,
-        messages,
-        tools: [...(options.tools || []), ...mcpTools],
-        tool_choice: options.tool_choice || "auto"
-    };
-    
-    return updatedOptions;
+    return '';
 }
 
 /**
- * Process a streamed response with MCP tool calls
- * @param {object} params - Stream processing parameters
- * @param {ReadableStream} params.stream - Stream from the API response
- * @param {Function} params.onChunk - Callback for each chunk of text
- * @param {Function} params.onToolCall - Callback when a tool call is detected
- * @param {Function} params.onToolResult - Callback when a tool result is ready
- * @param {Function} params.onComplete - Callback when streaming is complete
- * @param {string} params.token - Authentication token
- * @returns {Promise<object>} The complete response object
- */
-export function processMCPStream(params) {
-    const { stream, onChunk, onToolCall, onToolResult, onComplete, token } = params;
-    
-    return processStream(
-        stream,
-        onChunk,
-        onToolCall,
-        onToolResult,
-        onComplete,
-        token
-    );
-}
-
-/**
- * Handle tool calls in a response
+ * Initialize MCP for a chat session
+ * @param {Object} requestOptions - Original request options
  * @param {string} token - Authentication token
- * @param {object} response - Model response
- * @returns {Promise<object>} Updated response with tool results
+ * @returns {Object} Enhanced request options with MCP
  */
-export async function handleToolCalls(token, response) {
-    return await processToolCalls(token, response);
+export function initializeMCP(requestOptions, token) {
+    if (!isMCPEnabled()) {
+        return requestOptions;
+    }
+    
+    // Enhance the request with MCP capabilities
+    return addMCPCapabilities(requestOptions, token);
 }
 
 /**
- * Update conversation history with tool calls and results
- * @param {Array} messages - Original conversation messages
- * @param {object} aiMessage - AI message with tool calls
- * @param {Array} toolResults - Results of tool execution
- * @returns {Array} Updated conversation messages
+ * Process a response to handle tool calls
+ * @param {string} token - Authentication token
+ * @param {Object} response - Response from the model
+ * @returns {Promise<Object>} Processed response with tool results
  */
-export function updateConversationWithToolResults(messages, aiMessage, toolResults) {
-    return constructFollowUpMessages(messages, aiMessage, toolResults);
+export async function processMCPResponse(token, response) {
+    if (!isMCPEnabled()) {
+        return response;
+    }
+    
+    // Check if response has tool calls
+    if (!response?.choices?.[0]?.message?.tool_calls) {
+        return response;
+    }
+    
+    // Get the active server
+    const server = getActiveMCPServer();
+    if (!server) {
+        return response;
+    }
+    
+    try {
+        // Process the tool calls in the response
+        const processedMessage = await processMCPModelResponse(
+            token,
+            response.choices[0].message,
+            server.id
+        );
+        
+        // Update the response with the processed message
+        if (processedMessage.toolResults) {
+            response.choices[0].message = processedMessage;
+        }
+    } catch (error) {
+        console.error('Error processing MCP response:', error);
+    }
+    
+    return response;
+}
+
+/**
+ * Prepare follow-up messages with tool results
+ * @param {Array} messages - Original messages
+ * @param {Object} response - Model response with tool results
+ * @returns {Array} Updated messages
+ */
+export function prepareMCPFollowUp(messages, response) {
+    if (!isMCPEnabled() || !response?.choices?.[0]?.message?.toolResults) {
+        return messages;
+    }
+    
+    // Enhance messages with tool results
+    return enhanceMessagesWithToolResults(
+        messages,
+        response.choices[0].message.toolResults
+    );
 }
