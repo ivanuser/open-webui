@@ -1,21 +1,12 @@
-<!-- Chat controls with enhanced MCP functionality -->
+<!-- Chat controls with minimal MCP functionality -->
 <script>
 	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import { get } from 'svelte/store';
-	import { toast } from '$lib/components/ui/toasts';
-	import * as Alert from '$lib/components/ui/alert';
-
-	import FileInput from '../MessageInput/FileInput.svelte';
-	import PromptDropdown from '../PromptDropdown/PromptDropdown.svelte';
-	import MCPServerSelector from '../MCPServerSelector/MCPServerSelector.svelte';
-	import MCPInstructions from './MCPInstructions.svelte';
-	import VoiceInput from '../MessageInput/VoiceInput.svelte';
 	import { prepareMCPSystemPrompt } from '$lib/components/chat/MCPHandler';
 	import { settings, mcpServers } from '$lib/stores';
 	import { formatText } from '$lib/utils/text';
-	import { debounce } from '$lib/utils/debounce';
 
 	export let messages = [];
 	export let height = 'h-[110px]';
@@ -39,15 +30,7 @@
 	export let systemPrompt = '';
 
 	const dispatch = createEventDispatcher();
-	let promptDropdownRef;
-	let showDropdown = false;
-	let showImageUploadButton = true;
-	let showAudioButton = true;
-	let showSendButton = true;
 	let showInstructions = false;
-	let showSettings = false;
-	let showSettings2 = false;
-	let showMCPConfig = false;
 	let activeMCPServer = null;
 	let connectedMCPServers = [];
 	let size = 0;
@@ -88,12 +71,6 @@
 		if (loading) return;
 		if (disabled && !isLandingPage) return;
 
-		// Check files to upload first
-		if (filesToUpload?.length > 0) {
-			dispatch('uploadFiles', { files: filesToUpload, content: value });
-			return;
-		}
-
 		// Check if there is a message to submit
 		let messageToSubmit = formatText(value);
 		if (messageToSubmit.trim() === '') return;
@@ -132,7 +109,7 @@
 		dispatch('stopGenerating');
 	}
 
-	// Simple translation function for compatibility
+	// Simple translation function
 	function _(key) {
 		// For controls that use $_() in the template
 		const translations = {
@@ -146,26 +123,6 @@
 	export function handleContentChange(updatedValue) {
 		value = updatedValue || '';
 		handleHeight({ target: { value } });
-	}
-
-	// Handle files upload
-	export function handleFilesUpload(files, keep = false) {
-		if (!keep) {
-			filesToUpload = files;
-		} else {
-			filesToUpload = [...filesToUpload, ...files];
-		}
-	}
-
-	// Remove file
-	export function removeFile(index) {
-		filesToUpload.splice(index, 1);
-		filesToUpload = [...filesToUpload];
-	}
-
-	// Clear files
-	export function clearFiles() {
-		filesToUpload = [];
 	}
 
 	// Get MCP tools for a server
@@ -337,18 +294,6 @@
 			
 			if (defaultServerId) {
 				activeMCPServer = connectedMCPServers.find(s => s.id === defaultServerId);
-				
-				if (activeMCPServer) {
-					// Verify server connection
-					await verifyMCPServerConnection(activeMCPServer);
-				} else {
-					// If default server is set but not connected, try to connect it
-					const server = servers.find(s => s.id === defaultServerId);
-					if (server) {
-						// Try to reconnect
-						await autoConnectMCPServer(server);
-					}
-				}
 			}
 			
 			// If no active server but we have connected servers, use the first one
@@ -380,145 +325,6 @@
 			isInitialized = true;
 		} catch (error) {
 			console.error('Error initializing MCP integration:', error);
-			
-			// Schedule retry
-			if (mcpInitializeTimeout) {
-				clearTimeout(mcpInitializeTimeout);
-			}
-			
-			mcpInitializeTimeout = setTimeout(() => {
-				isInitialized = false;
-				initializeMCPIntegration();
-			}, 5000); // Retry after 5 seconds
-		}
-	}
-
-	// Auto-connect MCP server on startup
-	async function autoConnectMCPServer(server) {
-		if (!server) return false;
-		
-		try {
-			// Try to ping the server to see if it's running
-			const response = await fetch(`${server.url}/info`, {
-				method: 'GET',
-				headers: {
-					...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
-				}
-			});
-			
-			if (response.ok) {
-				// Server is running, update its status to connected
-				server.status = 'connected';
-				server.lastConnected = new Date().toISOString();
-				
-				// Update the active server
-				activeMCPServer = server;
-				
-				// Update the list of connected servers
-				connectedMCPServers = [...connectedMCPServers.filter(s => s.id !== server.id), server];
-				
-				// Update settings
-				const currentSettings = get(settings);
-				if (currentSettings) {
-					if (!currentSettings.enabledMcpServers) {
-						currentSettings.enabledMcpServers = [];
-					}
-					
-					if (!currentSettings.enabledMcpServers.includes(server.id)) {
-						currentSettings.enabledMcpServers.push(server.id);
-					}
-					
-					currentSettings.defaultMcpServer = server.id;
-					
-					settings.set(currentSettings);
-					localStorage.setItem('userSettings', JSON.stringify(currentSettings));
-				}
-				
-				// Update servers in storage
-				const allServers = get(mcpServers) || [];
-				const updatedServers = allServers.map(s => {
-					if (s.id === server.id) {
-						return { ...s, status: 'connected', lastConnected: new Date().toISOString() };
-					}
-					return s;
-				});
-				
-				mcpServers.set(updatedServers);
-				localStorage.setItem('mcpServers', JSON.stringify(updatedServers));
-				
-				console.log(`Auto-connected to MCP server: ${server.name}`);
-				return true;
-			}
-		} catch (error) {
-			console.error(`Failed to auto-connect to MCP server ${server.name}:`, error);
-		}
-		
-		return false;
-	}
-
-	// Verify MCP server connection
-	async function verifyMCPServerConnection(server) {
-		if (!server) return false;
-		
-		try {
-			const response = await fetch(`${server.url}/info`, {
-				method: 'GET',
-				headers: {
-					...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
-				}
-			});
-			
-			if (!response.ok) {
-				throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-			}
-			
-			const info = await response.json();
-			console.log(`Verified connection to MCP server: ${server.name}`, info);
-			return true;
-		} catch (error) {
-			console.error(`Failed to verify MCP server connection for ${server.name}:`, error);
-			
-			// Mark server as disconnected
-			server.status = 'disconnected';
-			
-			// Update the list of connected servers
-			connectedMCPServers = connectedMCPServers.filter(s => s.id !== server.id);
-			
-			// If this was the active server, clear it
-			if (activeMCPServer && activeMCPServer.id === server.id) {
-				activeMCPServer = null;
-			}
-			
-			// Update settings
-			const currentSettings = get(settings);
-			if (currentSettings && currentSettings.enabledMcpServers) {
-				currentSettings.enabledMcpServers = currentSettings.enabledMcpServers.filter(
-					id => id !== server.id
-				);
-				
-				if (currentSettings.defaultMcpServer === server.id) {
-					currentSettings.defaultMcpServer = currentSettings.enabledMcpServers.length > 0 
-						? currentSettings.enabledMcpServers[0] 
-						: null;
-				}
-				
-				settings.set(currentSettings);
-				localStorage.setItem('userSettings', JSON.stringify(currentSettings));
-			}
-			
-			// Update servers in storage
-			const allServers = get(mcpServers) || [];
-			const updatedServers = allServers.map(s => {
-				if (s.id === server.id) {
-					return { ...s, status: 'disconnected' };
-				}
-				return s;
-			});
-			
-			mcpServers.set(updatedServers);
-			localStorage.setItem('mcpServers', JSON.stringify(updatedServers));
-			
-			return false;
 		}
 	}
 
@@ -532,13 +338,6 @@
 			currentSettings.defaultMcpServer = activeMCPServer?.id || null;
 			settings.set(currentSettings);
 			localStorage.setItem('userSettings', JSON.stringify(currentSettings));
-		}
-	}
-
-	// Update MCPServerSelector when connectedMCPServers changes
-	$: {
-		if (connectedMCPServers) {
-			// Keep it updated
 		}
 	}
 
@@ -564,60 +363,6 @@
 <div
 	class="flex flex-col w-full relative border-gray-900/10 dark:border-gray-300/10 max-w-3xl mx-auto"
 >
-	<!-- Controls for MCP, Settings, and other tools -->
-	<div class="flex flex-col gap-2">
-		{#if filesToUpload?.length > 0}
-			<!-- File upload preview -->
-			<div
-				class="w-full flex flex-wrap gap-2 mt-2 p-2 dark:bg-gray-800 bg-gray-100 rounded-xl overflow-x-auto"
-			>
-				{#each filesToUpload as file, i}
-					<div
-						class="shrink-0 flex items-center gap-2 px-2 py-1 dark:bg-gray-700 bg-gray-200 rounded-lg"
-					>
-						<button
-							class="h-4 w-4 rounded-full bg-red-500 flex justify-center items-center text-white"
-							on:click={() => removeFile(i)}
-						>
-							&times;
-						</button>
-						<span class="text-xs">{file.name}</span>
-					</div>
-				{/each}
-				<button
-					on:click={clearFiles}
-					class="shrink-0 flex items-center gap-2 px-2 py-1 dark:bg-gray-700 bg-gray-200 rounded-lg text-xs"
-				>
-					Clear All
-				</button>
-			</div>
-		{/if}
-
-		<!-- MCP server selector and instructions -->
-		<div class="flex justify-between gap-2 items-center mb-2">
-			<div class="flex gap-2 items-center">
-				<MCPServerSelector
-					bind:connectedServers={connectedMCPServers}
-					bind:activeServer={activeMCPServer}
-					on:change={handleActiveMCPServerChange}
-				/>
-				
-				{#if activeMCPServer}
-					<button
-						on:click={() => (showInstructions = !showInstructions)}
-						class="text-xs text-gray-500 dark:text-gray-400 hover:underline"
-					>
-						{showInstructions ? 'Hide Instructions' : 'Show Instructions'}
-					</button>
-				{/if}
-			</div>
-		</div>
-		
-		{#if showInstructions && activeMCPServer}
-			<MCPInstructions serverType={activeMCPServer.type} />
-		{/if}
-	</div>
-
 	<!-- Textarea for message input -->
 	<div class="relative flex flex-col w-full">
 		<slot name="textarea" {value} {handleContentChange} {submitMessage} {disabled} {placeholder} />
@@ -626,7 +371,7 @@
 			class="flex items-center justify-between gap-2 py-2 {!!value ? 'visible' : 'invisible'}"
 		>
 			<!-- Submit button -->
-			{#if showSendButton && (!generating || isLandingPage)}
+			{#if !generating || isLandingPage}
 				<div class="flex justify-end items-center">
 					<button
 						disabled={loading || (disabled && !isLandingPage)}
