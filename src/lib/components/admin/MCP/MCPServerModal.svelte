@@ -3,14 +3,6 @@
 	import { createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { standardMCPServers, generateMCPServerConfig } from './MCPServerConfig.js';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Card from '$lib/components/ui/card';
-	import * as Button from '$lib/components/ui/button';
-	import * as Select from '$lib/components/ui/select';
-	import * as Input from '$lib/components/ui/input';
-	import * as Label from '$lib/components/ui/label';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import { toast } from '$lib/components/ui/toasts';
 	
 	export let open = false;
 	export let serverToEdit = null;
@@ -28,7 +20,7 @@
 	let apiKey = '';
 	let useCustomCommand = false;
 	let manualCommandInput = '';
-	let serverTabs = 'config';
+	let activeTab = 'config';
 	
 	// Form validation
 	let nameError = '';
@@ -58,7 +50,7 @@
 		apiKey = '';
 		useCustomCommand = false;
 		manualCommandInput = '';
-		serverTabs = 'config';
+		activeTab = 'config';
 		nameError = '';
 		basePathError = '';
 		portError = '';
@@ -158,11 +150,7 @@
 				serverConfig.command = parts[0];
 				serverConfig.args = parts.slice(1);
 			} else {
-				toast({
-					title: 'Invalid Command',
-					description: 'Please enter a valid command',
-					type: 'error'
-				});
+				alert('Please enter a valid command');
 				return;
 			}
 		} else {
@@ -195,136 +183,226 @@
 	}
 </script>
 
-<Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-[600px]">
-		<Dialog.Header>
-			<Dialog.Title>{isEditMode ? 'Edit MCP Server' : 'Add MCP Server'}</Dialog.Title>
-			<Dialog.Description>
-				Configure a Model Context Protocol server to extend AI capabilities
-			</Dialog.Description>
-		</Dialog.Header>
-		
-		<Tabs.Root value={serverTabs}>
-			<Tabs.List>
-				<Tabs.Trigger value="config">Configuration</Tabs.Trigger>
-				<Tabs.Trigger value="advanced">Advanced</Tabs.Trigger>
-			</Tabs.List>
-			
-			<Tabs.Content value="config" class="pt-4">
-				<div class="grid gap-4">
-					<div class="grid grid-cols-4 items-center gap-4">
-						<Label.Root for="server-name" class="text-right">
-							Name
-						</Label.Root>
-						<Input.Root id="server-name" class="col-span-3" bind:value={serverName} />
-						{#if nameError}
-							<div class="col-span-3 col-start-2 text-xs text-red-500">{nameError}</div>
-						{/if}
-					</div>
-					
-					<div class="grid grid-cols-4 items-center gap-4">
-						<Label.Root for="server-type" class="text-right">
-							Type
-						</Label.Root>
-						<Select.Root bind:value={serverType} onchange={handleTypeChange} class="col-span-3">
-							<Select.Trigger id="server-type">
-								<Select.Value placeholder="Select server type" />
-							</Select.Trigger>
-							<Select.Content>
-								<Select.Group>
-									{#each Object.entries(standardMCPServers) as [type, config]}
-										<Select.Item value={type}>
-											{config.name} - {config.description}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							</Select.Content>
-						</Select.Root>
-					</div>
-					
-					{#if serverType === 'filesystem'}
-						<div class="grid grid-cols-4 items-center gap-4">
-							<Label.Root for="base-path" class="text-right">
-								Base Path
-							</Label.Root>
-							<Input.Root id="base-path" class="col-span-3" bind:value={basePath} />
-							{#if basePathError}
-								<div class="col-span-3 col-start-2 text-xs text-red-500">{basePathError}</div>
-							{/if}
-						</div>
-					{/if}
-					
-					<div class="grid grid-cols-4 items-center gap-4">
-						<Label.Root for="port" class="text-right">
-							Port
-						</Label.Root>
-						<Input.Root id="port" type="number" class="col-span-3" bind:value={port} />
-						{#if portError}
-							<div class="col-span-3 col-start-2 text-xs text-red-500">{portError}</div>
-						{/if}
-					</div>
-					
-					{#if serverType === 'github'}
-						<div class="grid grid-cols-4 items-center gap-4">
-							<Label.Root for="github-token" class="text-right">
-								GitHub Token
-							</Label.Root>
-							<Input.Root id="github-token" type="password" class="col-span-3" 
-								bind:value={serverEnv.GITHUB_PERSONAL_ACCESS_TOKEN} />
-						</div>
-					{/if}
-					
-					<div class="grid grid-cols-4 items-center gap-4">
-						<Label.Root for="api-key" class="text-right">
-							API Key (Optional)
-						</Label.Root>
-						<Input.Root id="api-key" type="password" class="col-span-3" 
-							bind:value={apiKey} placeholder="Leave blank for no authentication" />
-					</div>
-				</div>
-			</Tabs.Content>
-			
-			<Tabs.Content value="advanced" class="pt-4">
-				<div class="grid gap-4">
-					<div class="flex items-center gap-2">
-						<input type="checkbox" id="use-custom-command" bind:checked={useCustomCommand} />
-						<Label.Root for="use-custom-command">
-							Use custom command
-						</Label.Root>
-					</div>
-					
-					{#if useCustomCommand}
-						<div class="grid grid-cols-4 items-center gap-4">
-							<Label.Root for="manual-command" class="text-right">
-								Command
-							</Label.Root>
-							<Input.Root id="manual-command" class="col-span-3" 
-								bind:value={manualCommandInput} 
-								placeholder="npx -y @modelcontextprotocol/server-filesystem /path/to/files" />
-						</div>
-					{:else}
-						<div class="border p-3 rounded-md">
-							<p class="text-sm font-medium mb-2">Generated Command:</p>
-							<pre class="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">{serverCommand} {serverArgs.join(' ')}</pre>
-						</div>
-					{/if}
-					
-					<div class="grid grid-cols-4 items-center gap-4">
-						<Label.Root for="server-url" class="text-right">
-							Server URL
-						</Label.Root>
-						<div class="col-span-3">
-							<Input.Root id="server-url" disabled value={`http://localhost:${port}`} />
-							<p class="text-xs text-gray-500 mt-1">Auto-generated from port</p>
-						</div>
-					</div>
-				</div>
-			</Tabs.Content>
-		</Tabs.Root>
-		
-		<Dialog.Footer>
-			<Button.Root variant="outline" on:click={handleCancel}>Cancel</Button.Root>
-			<Button.Root on:click={handleSave}>{isEditMode ? 'Update' : 'Add'} Server</Button.Root>
-		</Dialog.Footer>
-	</Dialog.Content>
-</Dialog.Root>
+{#if open}
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" transition:fade>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full mx-4 p-6" in:fade={{ duration: 200 }}>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">{isEditMode ? 'Edit MCP Server' : 'Add MCP Server'}</h2>
+            <button 
+                class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                on:click={handleCancel}
+            >
+                ✕
+            </button>
+        </div>
+        
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Configure a Model Context Protocol server to extend AI capabilities
+        </p>
+        
+        <div class="mb-4">
+            <div class="flex border-b border-gray-300 dark:border-gray-700">
+                <button 
+                    class="px-4 py-2 {activeTab === 'config' ? 'border-b-2 border-blue-500 font-medium' : 'text-gray-500'}"
+                    on:click={() => activeTab = 'config'}
+                >
+                    Configuration
+                </button>
+                <button 
+                    class="px-4 py-2 {activeTab === 'advanced' ? 'border-b-2 border-blue-500 font-medium' : 'text-gray-500'}"
+                    on:click={() => activeTab = 'advanced'}
+                >
+                    Advanced
+                </button>
+            </div>
+        </div>
+        
+        {#if activeTab === 'config'}
+            <div class="space-y-4">
+                <!-- Server Name -->
+                <div class="grid grid-cols-4 gap-4">
+                    <label for="server-name" class="col-span-1 flex items-center text-sm font-medium">
+                        Name
+                    </label>
+                    <div class="col-span-3">
+                        <input 
+                            id="server-name" 
+                            type="text" 
+                            class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                            bind:value={serverName} 
+                        />
+                        {#if nameError}
+                            <p class="text-red-500 text-xs mt-1">{nameError}</p>
+                        {/if}
+                    </div>
+                </div>
+                
+                <!-- Server Type -->
+                <div class="grid grid-cols-4 gap-4">
+                    <label for="server-type" class="col-span-1 flex items-center text-sm font-medium">
+                        Type
+                    </label>
+                    <div class="col-span-3">
+                        <select 
+                            id="server-type" 
+                            class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                            bind:value={serverType}
+                            on:change={handleTypeChange}
+                        >
+                            {#each Object.entries(standardMCPServers) as [type, config]}
+                                <option value={type}>
+                                    {config.name} - {config.description}
+                                </option>
+                            {/each}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Base Path (for filesystem) -->
+                {#if serverType === 'filesystem'}
+                    <div class="grid grid-cols-4 gap-4">
+                        <label for="base-path" class="col-span-1 flex items-center text-sm font-medium">
+                            Base Path
+                        </label>
+                        <div class="col-span-3">
+                            <input 
+                                id="base-path" 
+                                type="text" 
+                                class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                                bind:value={basePath} 
+                            />
+                            {#if basePathError}
+                                <p class="text-red-500 text-xs mt-1">{basePathError}</p>
+                            {/if}
+                        </div>
+                    </div>
+                {/if}
+                
+                <!-- Port -->
+                <div class="grid grid-cols-4 gap-4">
+                    <label for="port" class="col-span-1 flex items-center text-sm font-medium">
+                        Port
+                    </label>
+                    <div class="col-span-3">
+                        <input 
+                            id="port" 
+                            type="number" 
+                            class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                            bind:value={port} 
+                        />
+                        {#if portError}
+                            <p class="text-red-500 text-xs mt-1">{portError}</p>
+                        {/if}
+                    </div>
+                </div>
+                
+                <!-- GitHub Token (for github) -->
+                {#if serverType === 'github'}
+                    <div class="grid grid-cols-4 gap-4">
+                        <label for="github-token" class="col-span-1 flex items-center text-sm font-medium">
+                            GitHub Token
+                        </label>
+                        <div class="col-span-3">
+                            <input 
+                                id="github-token" 
+                                type="password" 
+                                class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                                bind:value={serverEnv.GITHUB_PERSONAL_ACCESS_TOKEN} 
+                            />
+                        </div>
+                    </div>
+                {/if}
+                
+                <!-- API Key -->
+                <div class="grid grid-cols-4 gap-4">
+                    <label for="api-key" class="col-span-1 flex items-center text-sm font-medium">
+                        API Key
+                    </label>
+                    <div class="col-span-3">
+                        <input 
+                            id="api-key" 
+                            type="password" 
+                            class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                            bind:value={apiKey} 
+                            placeholder="Leave blank for no authentication"
+                        />
+                        <p class="text-gray-500 text-xs mt-1">Optional</p>
+                    </div>
+                </div>
+            </div>
+        {:else if activeTab === 'advanced'}
+            <div class="space-y-4">
+                <!-- Custom Command Toggle -->
+                <div class="flex items-center mb-4">
+                    <input 
+                        id="use-custom-command" 
+                        type="checkbox" 
+                        class="w-4 h-4 text-blue-600"
+                        bind:checked={useCustomCommand} 
+                    />
+                    <label for="use-custom-command" class="ml-2 text-sm font-medium">
+                        Use custom command
+                    </label>
+                </div>
+                
+                <!-- Custom Command Input -->
+                {#if useCustomCommand}
+                    <div class="grid grid-cols-4 gap-4">
+                        <label for="manual-command" class="col-span-1 flex items-center text-sm font-medium">
+                            Command
+                        </label>
+                        <div class="col-span-3">
+                            <input 
+                                id="manual-command" 
+                                type="text" 
+                                class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                                bind:value={manualCommandInput} 
+                                placeholder="npx -y @modelcontextprotocol/server-filesystem /path/to/files"
+                            />
+                        </div>
+                    </div>
+                {:else}
+                    <!-- Generated Command Preview -->
+                    <div class="border rounded p-3 border-gray-300 dark:border-gray-700">
+                        <p class="text-sm font-medium mb-2">Generated Command:</p>
+                        <pre class="text-xs bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-x-auto">{serverCommand} {serverArgs.join(' ')}</pre>
+                    </div>
+                {/if}
+                
+                <!-- Server URL -->
+                <div class="grid grid-cols-4 gap-4">
+                    <label for="server-url" class="col-span-1 flex items-center text-sm font-medium">
+                        Server URL
+                    </label>
+                    <div class="col-span-3">
+                        <input 
+                            id="server-url" 
+                            type="text" 
+                            class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2 bg-gray-100 dark:bg-gray-800"
+                            value={`http://localhost:${port}`}
+                            disabled
+                        />
+                        <p class="text-gray-500 text-xs mt-1">Auto-generated from port</p>
+                    </div>
+                </div>
+            </div>
+        {/if}
+        
+        <!-- Footer -->
+        <div class="flex justify-end mt-6 space-x-2">
+            <button 
+                class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                on:click={handleCancel}
+            >
+                Cancel
+            </button>
+            <button 
+                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                on:click={handleSave}
+            >
+                {isEditMode ? 'Update' : 'Add'} Server
+            </button>
+        </div>
+    </div>
+</div>
+{/if}
