@@ -1,6 +1,5 @@
 /**
- * MCP Handler - Simplified version
- * Provides core MCP integration for Open WebUI
+ * MCP Handler - For integration with OpenAI/Ollama models
  */
 
 /**
@@ -36,8 +35,7 @@ export function prepareMCPSystemPrompt(activeModel, tools = []) {
 \`\`\`
 
 After I show you the tool result, please continue the conversation.
-IMPORTANT: When asked to perform a task that can be done with these tools, USE THE TOOLS directly instead of making up a response.
-For example, when asked about files or directories, use the appropriate filesystem tools.
+IMPORTANT: When asked about files or directories, USE THE TOOLS instead of making up a response.
 `;
 
     return toolsPrompt;
@@ -107,8 +105,223 @@ export function processToolCalls(response, callback) {
     }
 }
 
-// Default export
+/**
+ * Process MCP tool calls from OpenAI models
+ * @param {String} token - Auth token
+ * @param {Object} message - Model response message
+ * @param {String} serverId - MCP server ID
+ * @returns {Promise<Object>} - Processed message
+ */
+export async function processMCPModelResponse(token, message, serverId) {
+    if (!message.tool_calls || message.tool_calls.length === 0) {
+        return message;
+    }
+    
+    try {
+        // Import the processToolCall function dynamically
+        let processToolCall;
+        try {
+            const mcpApi = await import('$lib/apis/mcp');
+            processToolCall = mcpApi.processToolCall;
+        } catch (error) {
+            console.error('Failed to import processToolCall:', error);
+            return message;
+        }
+        
+        // Process each tool call
+        const toolResults = [];
+        
+        for (const toolCall of message.tool_calls) {
+            try {
+                const result = await processToolCall(token, {
+                    serverId,
+                    tool: toolCall.function.name,
+                    args: JSON.parse(toolCall.function.arguments)
+                });
+                
+                toolResults.push({
+                    id: toolCall.id,
+                    type: toolCall.type,
+                    function: {
+                        name: toolCall.function.name,
+                        arguments: toolCall.function.arguments
+                    },
+                    result
+                });
+            } catch (error) {
+                console.error(`Error processing tool call ${toolCall.function.name}:`, error);
+            }
+        }
+        
+        // Add the tool results to the message
+        message.toolResults = toolResults;
+        
+        return message;
+    } catch (error) {
+        console.error('Error processing MCP tool calls:', error);
+        return message;
+    }
+}
+
+/**
+ * Get MCP tools based on server type
+ * @param {String} serverType - MCP server type
+ * @returns {Array} - Tool definitions
+ */
+export function getMCPTools(serverType) {
+    if (serverType === 'filesystem' || serverType === 'filesystem-py') {
+        return [
+            {
+                name: "list_directory",
+                description: "Lists all files and directories in the specified directory path",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the directory"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "read_file",
+                description: "Reads the content of a file",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the file"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "write_file",
+                description: "Creates a new file or overwrites an existing file",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string", 
+                            description: "The absolute path where the file should be created or overwritten"
+                        },
+                        content: {
+                            type: "string",
+                            description: "Content to write to the file"
+                        }
+                    },
+                    required: ["path", "content"]
+                }
+            },
+            {
+                name: "create_directory",
+                description: "Creates a new directory or ensures it exists",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path where the directory should be created"
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "search_files",
+                description: "Searches for files matching a pattern in a directory",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the directory to search in"
+                        },
+                        pattern: {
+                            type: "string",
+                            description: "The search pattern (glob format)"
+                        }
+                    },
+                    required: ["path", "pattern"]
+                }
+            },
+            {
+                name: "get_file_info",
+                description: "Gets detailed information about a file or directory",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "The absolute path to the file or directory"
+                        }
+                    },
+                    required: ["path"]
+                }
+            }
+        ];
+    } else if (serverType === 'memory') {
+        return [
+            {
+                name: "store_memory",
+                description: "Stores information in the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        key: {
+                            type: "string",
+                            description: "The key to store the information under"
+                        },
+                        value: {
+                            type: "string",
+                            description: "The information to store"
+                        }
+                    },
+                    required: ["key", "value"]
+                }
+            },
+            {
+                name: "retrieve_memory",
+                description: "Retrieves information from the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        key: {
+                            type: "string",
+                            description: "The key to retrieve information for"
+                        }
+                    },
+                    required: ["key"]
+                }
+            },
+            {
+                name: "search_memory",
+                description: "Searches for information in the memory server",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        query: {
+                            type: "string",
+                            description: "The search query"
+                        }
+                    },
+                    required: ["query"]
+                }
+            }
+        ];
+    }
+    
+    return [];
+}
+
+// Default export with all functions
 export default {
     prepareMCPSystemPrompt,
-    processToolCalls
+    processToolCalls,
+    processMCPModelResponse,
+    getMCPTools
 };
