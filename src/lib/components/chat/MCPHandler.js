@@ -99,6 +99,7 @@ export async function processPotentialToolCalls(modelResponse, callback) {
                     // Check if this is a valid tool call
                     if (toolCall.tool && toolCall.tool_input) {
                         // Execute the tool
+                        const { executeMCPTool } = await import('$lib/apis/mcp/execute');
                         const toolResult = await executeMCPTool(
                             mcpServer,
                             toolCall.tool,
@@ -152,20 +153,6 @@ Tool result: ${JSON.stringify(call.toolResult, null, 2)}
     }
     
     return { text: modelResponse, toolCalls: [] };
-}
-
-/**
- * Execute an MCP tool via the server
- */
-async function executeMCPTool(server, toolName, toolInput) {
-    try {
-        // Import dynamically to avoid circular dependencies
-        const { executeTool } = await import('$lib/apis/mcp/execute');
-        return await executeTool(server, toolName, toolInput);
-    } catch (error) {
-        console.error(`Error executing MCP tool ${toolName}:`, error);
-        return { error: `Failed to execute tool: ${error.message}` };
-    }
 }
 
 // Utility to escape special regex characters in string

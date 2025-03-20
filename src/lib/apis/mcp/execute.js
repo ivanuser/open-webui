@@ -7,7 +7,7 @@
  * @param {Object} toolInput - Input parameters for the tool
  * @returns {Promise<Object>} - Result of the tool execution
  */
-export async function executeTool(server, toolName, toolInput) {
+export async function executeMCPTool(server, toolName, toolInput) {
     if (!server || !server.url) {
         throw new Error('MCP server not configured');
     }
@@ -43,6 +43,9 @@ export async function executeTool(server, toolName, toolInput) {
         };
     }
 }
+
+// Alias executeTool to maintain backward compatibility
+export const executeTool = executeMCPTool;
 
 /**
  * Execute filesystem specific tools with proper path handling
@@ -87,5 +90,6 @@ async function executeFilesystemTool(server, toolName, toolInput) {
 
 // Export default object
 export default {
+    executeMCPTool,
     executeTool
 };
