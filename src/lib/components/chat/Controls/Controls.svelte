@@ -3,7 +3,6 @@
 	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
-	import { _ } from 'svelte-i18n';
 	import { get } from 'svelte/store';
 	import { toast } from '$lib/components/ui/toasts';
 	import * as Alert from '$lib/components/ui/alert';
@@ -133,8 +132,15 @@
 		dispatch('stopGenerating');
 	}
 
-	// Using the imported _ function for translations
-	// No need to redefine it
+	// Simple translation function for compatibility
+	function _(key) {
+		// For controls that use $_() in the template
+		const translations = {
+			'controls.stop': 'Stop',
+			'controls.continue': 'Continue'
+		};
+		return translations[key] || key;
+	}
 
 	// Handle content change
 	export function handleContentChange(updatedValue) {
@@ -649,7 +655,7 @@
 				class="flex justify-center items-center gap-2 px-4 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
 				on:click={stopGeneration}
 			>
-				<span>{$_('controls.stop')}</span>
+				<span>{_('controls.stop')}</span>
 			</button>
 		</div>
 	{:else if showContinue && !generating && !isLandingPage}
@@ -658,7 +664,7 @@
 				class="flex justify-center items-center gap-2 px-4 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
 				on:click={regenerateWithContinue}
 			>
-				<span>{$_('controls.continue')}</span>
+				<span>{_('controls.continue')}</span>
 			</button>
 		</div>
 	{/if}
