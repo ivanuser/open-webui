@@ -133,10 +133,8 @@
 		dispatch('stopGenerating');
 	}
 
-	function _(key) {
-		// i18n translation function
-		return key;
-	}
+	// Using the imported _ function for translations
+	// No need to redefine it
 
 	// Handle content change
 	export function handleContentChange(updatedValue) {
@@ -210,7 +208,7 @@
 							},
 							content: {
 								type: "string",
-								description: "The content to write to the file"
+								description: "Content to write to the file"
 							}
 						},
 						required: ["path", "content"]
