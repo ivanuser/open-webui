@@ -5,14 +5,14 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
-const glob = require('glob');
+const glob = promisify(require('glob'));
 
 // Configuration
 const config = {
     port: process.env.MCP_SERVER_PORT || 3500,
     basePath: process.argv[2] || '/tmp', // Use command line arg or default to /tmp
     apiKey: process.env.MCP_API_KEY || '',
-    debug: process.env.MCP_DEBUG === 'true'
+    debug: process.env.MCP_DEBUG === 'true' || false
 };
 
 // Create Express app
@@ -50,6 +50,16 @@ function logRequest(req, res, next) {
             console.log('Request body:', JSON.stringify(req.body, null, 2));
         }
     }
+    
+    // Add response logging for debug mode
+    if (config.debug) {
+        const originalSend = res.send;
+        res.send = function(body) {
+            console.log(`[${new Date().toISOString()}] Response:`, body);
+            return originalSend.call(this, body);
+        };
+    }
+    
     next();
 }
 
@@ -57,14 +67,47 @@ function logRequest(req, res, next) {
 app.use(logRequest);
 app.use(authenticate);
 
+// CORS preflight for all routes
+app.options('*', cors());
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Server info endpoint
 app.get('/info', (req, res) => {
-    res.json({
-        name: 'MCP Filesystem Server',
-        version: '1.0.0',
-        tools: ['read_file', 'write_file', 'list_directory', 'create_directory', 'search_files', 'get_file_info', 'list_allowed_directories'],
-        basePath: config.basePath
-    });
+    try {
+        // Check if base path exists and is readable
+        const basePath = config.basePath;
+        const baseStat = fs.statSync(basePath);
+        
+        if (!baseStat.isDirectory()) {
+            return res.status(500).json({
+                error: `Base path "${basePath}" is not a directory`,
+                name: 'MCP Filesystem Server',
+                version: '1.0.0',
+                status: 'error'
+            });
+        }
+        
+        // Return successful info response
+        res.json({
+            name: 'MCP Filesystem Server',
+            version: '1.0.0',
+            tools: ['read_file', 'write_file', 'list_directory', 'create_directory', 'search_files', 'get_file_info', 'list_allowed_directories'],
+            basePath: config.basePath,
+            status: 'running'
+        });
+    } catch (error) {
+        console.error('Error in info endpoint:', error);
+        res.status(500).json({
+            error: `Error accessing base path: ${error.message}`,
+            name: 'MCP Filesystem Server',
+            version: '1.0.0',
+            status: 'error'
+        });
+    }
 });
 
 // List available tools
@@ -175,6 +218,11 @@ app.get('/tools', (req, res) => {
 
 // Resolve and validate path
 function resolvePath(requestedPath) {
+    // Handle empty paths and root path
+    if (!requestedPath || requestedPath === '/' || requestedPath === '.') {
+        return config.basePath;
+    }
+    
     // Remove leading slash if present
     const normalizedPath = requestedPath.startsWith('/') 
         ? requestedPath.substring(1)
@@ -194,7 +242,7 @@ function resolvePath(requestedPath) {
 // Tool implementations
 app.post('/tools/read_file', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -204,7 +252,8 @@ app.post('/tools/read_file', async (req, res) => {
         if (!fs.existsSync(fullPath)) {
             return res.status(404).json({ 
                 error: 'File not found',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
@@ -213,7 +262,8 @@ app.post('/tools/read_file', async (req, res) => {
         if (!stats.isFile()) {
             return res.status(400).json({ 
                 error: 'Path is not a file',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
@@ -237,7 +287,7 @@ app.post('/tools/read_file', async (req, res) => {
 
 app.post('/tools/write_file', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -276,7 +326,7 @@ app.post('/tools/write_file', async (req, res) => {
 
 app.post('/tools/list_directory', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -286,7 +336,8 @@ app.post('/tools/list_directory', async (req, res) => {
         if (!fs.existsSync(fullPath)) {
             return res.status(404).json({ 
                 error: 'Directory not found',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
@@ -295,7 +346,8 @@ app.post('/tools/list_directory', async (req, res) => {
         if (!stats.isDirectory()) {
             return res.status(400).json({ 
                 error: 'Path is not a directory',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
@@ -304,16 +356,31 @@ app.post('/tools/list_directory', async (req, res) => {
         
         // Get details for each file/directory
         const contents = await Promise.all(files.map(async (file) => {
-            const filePath = path.join(fullPath, file);
-            const fileStats = fs.statSync(filePath);
-            
-            return {
-                name: file,
-                path: path.join(req.body.path, file).replace(/\\/g, '/'),
-                type: fileStats.isDirectory() ? 'directory' : 'file',
-                size: fileStats.size,
-                lastModified: fileStats.mtime
-            };
+            try {
+                const filePath = path.join(fullPath, file);
+                const fileStats = fs.statSync(filePath);
+                
+                // Format the relative path 
+                let relativePath = path.join(req.body.path, file).replace(/\\/g, '/');
+                if (!relativePath.startsWith('/')) {
+                    relativePath = '/' + relativePath;
+                }
+                
+                return {
+                    name: file,
+                    path: relativePath,
+                    type: fileStats.isDirectory() ? 'directory' : 'file',
+                    size: fileStats.size,
+                    lastModified: fileStats.mtime
+                };
+            } catch (error) {
+                console.error(`Error getting details for ${file}:`, error);
+                return {
+                    name: file,
+                    path: path.join(req.body.path, file).replace(/\\/g, '/'),
+                    error: error.message
+                };
+            }
         }));
         
         res.json({
@@ -331,7 +398,7 @@ app.post('/tools/list_directory', async (req, res) => {
 
 app.post('/tools/create_directory', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -355,7 +422,7 @@ app.post('/tools/create_directory', async (req, res) => {
 
 app.post('/tools/search_files', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -369,7 +436,8 @@ app.post('/tools/search_files', async (req, res) => {
         if (!fs.existsSync(fullPath)) {
             return res.status(404).json({ 
                 error: 'Directory not found',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
@@ -378,27 +446,39 @@ app.post('/tools/search_files', async (req, res) => {
         if (!stats.isDirectory()) {
             return res.status(400).json({ 
                 error: 'Path is not a directory',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
         // Search for files matching pattern
-        const globPromise = promisify(glob);
         const fullPattern = path.join(fullPath, req.body.pattern);
-        const matches = await globPromise(fullPattern);
+        const matches = await glob(fullPattern);
         
         // Format results
         const results = matches.map(match => {
-            const relativePath = path.relative(config.basePath, match);
-            const fileStats = fs.statSync(match);
-            
-            return {
-                name: path.basename(match),
-                path: `/${relativePath}`.replace(/\\/g, '/'),
-                type: fileStats.isDirectory() ? 'directory' : 'file',
-                size: fileStats.size,
-                lastModified: fileStats.mtime
-            };
+            try {
+                const relativePath = path.relative(config.basePath, match);
+                const fileStats = fs.statSync(match);
+                
+                // Format the relative path with leading slash
+                let formattedPath = `/${relativePath}`.replace(/\\/g, '/');
+                
+                return {
+                    name: path.basename(match),
+                    path: formattedPath,
+                    type: fileStats.isDirectory() ? 'directory' : 'file',
+                    size: fileStats.size,
+                    lastModified: fileStats.mtime
+                };
+            } catch (error) {
+                console.error(`Error getting details for ${match}:`, error);
+                return {
+                    name: path.basename(match),
+                    path: `/${path.relative(config.basePath, match)}`.replace(/\\/g, '/'),
+                    error: error.message
+                };
+            }
         });
         
         res.json({
@@ -418,7 +498,7 @@ app.post('/tools/search_files', async (req, res) => {
 
 app.post('/tools/get_file_info', async (req, res) => {
     try {
-        if (!req.body.path) {
+        if (!req.body || !req.body.path) {
             return res.status(400).json({ error: 'Path parameter is required' });
         }
         
@@ -428,12 +508,33 @@ app.post('/tools/get_file_info', async (req, res) => {
         if (!fs.existsSync(fullPath)) {
             return res.status(404).json({ 
                 error: 'File or directory not found',
-                path: req.body.path
+                path: req.body.path,
+                fullPath: config.debug ? fullPath : undefined
             });
         }
         
         // Get file/directory stats
         const stats = fs.statSync(fullPath);
+        
+        // Check permissions
+        let readable = false;
+        let writable = false;
+        let executable = false;
+        
+        try {
+            fs.accessSync(fullPath, fs.constants.R_OK);
+            readable = true;
+        } catch (e) {}
+        
+        try {
+            fs.accessSync(fullPath, fs.constants.W_OK);
+            writable = true;
+        } catch (e) {}
+        
+        try {
+            fs.accessSync(fullPath, fs.constants.X_OK);
+            executable = true;
+        } catch (e) {}
         
         res.json({
             path: req.body.path,
@@ -445,9 +546,9 @@ app.post('/tools/get_file_info', async (req, res) => {
             lastModified: stats.mtime,
             lastAccessed: stats.atime,
             permissions: {
-                readable: true, // Simplified, since we can read it if we got here
-                writable: true, // Simplified, would need more checks in production
-                executable: stats.mode & 0o111 ? true : false
+                readable,
+                writable,
+                executable
             }
         });
     } catch (error) {
@@ -465,10 +566,50 @@ app.post('/tools/list_allowed_directories', (req, res) => {
     });
 });
 
+// Default error handler
+app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+    res.status(500).json({
+        error: 'Internal server error',
+        message: config.debug ? err.message : 'An unexpected error occurred'
+    });
+});
+
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Not found',
+        path: req.path
+    });
+});
+
 // Start the server
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
     console.log(`MCP Filesystem Server running on port ${config.port}`);
     console.log(`Base path: ${config.basePath}`);
     console.log(`Authentication: ${config.apiKey ? 'Enabled' : 'Disabled'}`);
     console.log(`Debug mode: ${config.debug ? 'Enabled' : 'Disabled'}`);
+});
+
+// Handle process termination
+process.on('SIGINT', () => {
+    console.log('Shutting down MCP filesystem server...');
+    server.close(() => {
+        console.log('Server stopped');
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    console.log('Shutting down MCP filesystem server...');
+    server.close(() => {
+        console.log('Server stopped');
+        process.exit(0);
+    });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    // Keep server running despite the error
 });
