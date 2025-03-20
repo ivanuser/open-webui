@@ -1,667 +1,474 @@
-#!/usr/bin/env node
-/**
- * Standalone MCP Filesystem Server
- * 
- * This is a standalone implementation of an MCP filesystem server
- * that doesn't require the @modelcontextprotocol/server library.
- * It implements the same tools as the main MCP filesystem server.
- */
+// Improved MCP filesystem server implementation
 
-import fs from 'fs/promises';
-import path from 'path';
-import { existsSync, statSync, readdirSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import { createServer } from 'http';
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { promisify } = require('util');
+const glob = require('glob');
 
-// Get the current file's directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Configuration
+const config = {
+    port: process.env.MCP_SERVER_PORT || 3500,
+    basePath: process.argv[2] || '/tmp', // Use command line arg or default to /tmp
+    apiKey: process.env.MCP_API_KEY || '',
+    debug: process.env.MCP_DEBUG === 'true'
+};
 
-// Parse command line arguments for allowed directories
-const allowedDirs = process.argv.slice(2).map(dir => path.resolve(dir));
+// Create Express app
+const app = express();
 
-// If no directories specified, use current directory
-if (allowedDirs.length === 0) {
-    allowedDirs.push(process.cwd());
-}
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.text());
 
-console.log('Starting standalone MCP filesystem server with allowed directories:', allowedDirs);
-
-// Helper function to check if a path is allowed
-function isPathAllowed(filePath) {
-    const resolvedPath = path.resolve(filePath);
-    return allowedDirs.some(dir => resolvedPath === dir || resolvedPath.startsWith(dir + path.sep));
-}
-
-// Format file size for display
-function formatSize(bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let size = bytes;
-    let unitIndex = 0;
-    
-    while (size >= 1024 && unitIndex < units.length - 1) {
-        size /= 1024;
-        unitIndex++;
+// Authentication middleware
+function authenticate(req, res, next) {
+    if (!config.apiKey) {
+        return next(); // No API key configured, skip authentication
     }
     
-    return `${size.toFixed(2)} ${units[unitIndex]}`;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    if (token !== config.apiKey) {
+        return res.status(401).json({ error: 'Invalid API key' });
+    }
+    
+    next();
 }
 
-// Format timestamp for display
-function formatTimestamp(timestamp) {
-    return new Date(timestamp).toLocaleString();
+// Logging middleware
+function logRequest(req, res, next) {
+    if (config.debug) {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+        if (req.body && Object.keys(req.body).length > 0) {
+            console.log('Request body:', JSON.stringify(req.body, null, 2));
+        }
+    }
+    next();
+}
+
+// Apply middleware
+app.use(logRequest);
+app.use(authenticate);
+
+// Server info endpoint
+app.get('/info', (req, res) => {
+    res.json({
+        name: 'MCP Filesystem Server',
+        version: '1.0.0',
+        tools: ['read_file', 'write_file', 'list_directory', 'create_directory', 'search_files', 'get_file_info', 'list_allowed_directories'],
+        basePath: config.basePath
+    });
+});
+
+// List available tools
+app.get('/tools', (req, res) => {
+    res.json([
+        {
+            name: 'read_file',
+            description: 'Read the contents of a file from the file system',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path to the file to read'
+                    }
+                },
+                required: ['path']
+            }
+        },
+        {
+            name: 'write_file',
+            description: 'Write content to a file in the file system',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path where to write the file'
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'Content to write to the file'
+                    }
+                },
+                required: ['path', 'content']
+            }
+        },
+        {
+            name: 'list_directory',
+            description: 'List contents of a directory in the file system',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path to the directory to list'
+                    }
+                },
+                required: ['path']
+            }
+        },
+        {
+            name: 'create_directory',
+            description: 'Create a new directory in the file system',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path where to create the directory'
+                    }
+                },
+                required: ['path']
+            }
+        },
+        {
+            name: 'search_files',
+            description: 'Search for files matching a pattern in a directory',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path to the directory to search in'
+                    },
+                    pattern: {
+                        type: 'string',
+                        description: 'Pattern to search for (glob pattern)'
+                    }
+                },
+                required: ['path', 'pattern']
+            }
+        },
+        {
+            name: 'get_file_info',
+            description: 'Get detailed information about a file or directory',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Path to the file or directory'
+                    }
+                },
+                required: ['path']
+            }
+        },
+        {
+            name: 'list_allowed_directories',
+            description: 'List all directories that this server is allowed to access',
+            parameters: {
+                type: 'object',
+                properties: {}
+            }
+        }
+    ]);
+});
+
+// Resolve and validate path
+function resolvePath(requestedPath) {
+    // Remove leading slash if present
+    const normalizedPath = requestedPath.startsWith('/') 
+        ? requestedPath.substring(1)
+        : requestedPath;
+    
+    // Resolve full path
+    const fullPath = path.resolve(config.basePath, normalizedPath);
+    
+    // Check path is within basePath (security check)
+    if (!fullPath.startsWith(config.basePath)) {
+        throw new Error('Access denied: Path outside allowed directory');
+    }
+    
+    return fullPath;
 }
 
 // Tool implementations
-const tools = {
-    // Read a file
-    async read_file({ path: filePath }) {
-        // Handle path parameter that might be passed as an object
-        if (typeof filePath === 'object') {
-            filePath = filePath.path || '';
+app.post('/tools/read_file', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
         }
         
-        if (!filePath) {
-            return 'Error: No path provided';
+        const fullPath = resolvePath(req.body.path);
+        
+        // Check if file exists
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ 
+                error: 'File not found',
+                path: req.body.path
+            });
         }
         
-        if (!isPathAllowed(filePath)) {
-            return `Error: Access to ${filePath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
+        // Check if it's a file
+        const stats = fs.statSync(fullPath);
+        if (!stats.isFile()) {
+            return res.status(400).json({ 
+                error: 'Path is not a file',
+                path: req.body.path
+            });
         }
         
-        try {
-            const content = await fs.readFile(filePath, 'utf8');
-            return content;
-        } catch (error) {
-            return `Error reading file: ${error.message}`;
-        }
-    },
-    
-    // Read multiple files
-    async read_multiple_files({ paths }) {
-        const results = {};
+        // Read file content
+        const content = await fs.promises.readFile(fullPath, 'utf8');
         
-        for (const filePath of paths) {
-            if (!isPathAllowed(filePath)) {
-                results[filePath] = `Error: Access to ${filePath} is not allowed`;
-                continue;
-            }
-            
-            try {
-                const content = await fs.readFile(filePath, 'utf8');
-                results[filePath] = content;
-            } catch (error) {
-                results[filePath] = `Error reading file: ${error.message}`;
-            }
-        }
-        
-        return results;
-    },
-    
-    // Write to a file
-    async write_file({ path: filePath, content }) {
-        // Handle path parameter that might be passed as an object
-        if (typeof filePath === 'object') {
-            filePath = filePath.path || '';
-            content = filePath.content || '';
-        }
-        
-        if (!filePath) {
-            return 'Error: No path provided';
-        }
-        
-        if (!isPathAllowed(filePath)) {
-            return `Error: Access to ${filePath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            // Create directory if it doesn't exist
-            const dir = path.dirname(filePath);
-            await fs.mkdir(dir, { recursive: true });
-            
-            // Write the file
-            await fs.writeFile(filePath, content);
-            return `Successfully wrote ${content.length} characters to ${filePath}`;
-        } catch (error) {
-            return `Error writing file: ${error.message}`;
-        }
-    },
-    
-    // Create a directory
-    async create_directory({ path: dirPath }) {
-        // Handle path parameter that might be passed as an object
-        if (typeof dirPath === 'object') {
-            dirPath = dirPath.path || '';
-        }
-        
-        if (!dirPath) {
-            return 'Error: No path provided';
-        }
-        
-        if (!isPathAllowed(dirPath)) {
-            return `Error: Access to ${dirPath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            await fs.mkdir(dirPath, { recursive: true });
-            return `Successfully created directory at ${dirPath}`;
-        } catch (error) {
-            return `Error creating directory: ${error.message}`;
-        }
-    },
-    
-    // List a directory
-    async list_directory({ path: dirPath }) {
-        // Handle path parameter that might be passed as an object
-        if (typeof dirPath === 'object') {
-            dirPath = dirPath.path || '';
-        }
-        
-        if (!dirPath) {
-            // If no path provided, default to the first allowed directory
-            dirPath = allowedDirs[0];
-        }
-        
-        if (!isPathAllowed(dirPath)) {
-            return `Error: Access to ${dirPath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            // Check if path exists
-            try {
-                await fs.access(dirPath);
-            } catch (error) {
-                return `Error: Path ${dirPath} does not exist`;
-            }
-            
-            // Check if it's a directory
-            const stats = await fs.stat(dirPath);
-            if (!stats.isDirectory()) {
-                return `Error: Path ${dirPath} is not a directory`;
-            }
-            
-            // Read directory contents
-            const items = await fs.readdir(dirPath);
-            
-            let result = `Directory listing for ${dirPath}:\n`;
-            
-            const directories = [];
-            const files = [];
-            
-            // Process each item
-            for (const item of items) {
-                const itemPath = path.join(dirPath, item);
-                try {
-                    const itemStats = await fs.stat(itemPath);
-                    
-                    if (itemStats.isDirectory()) {
-                        directories.push(`[DIR] ${item}`);
-                    } else {
-                        files.push(`[FILE] ${item} (${formatSize(itemStats.size)})`);
-                    }
-                } catch (error) {
-                    console.error(`Error getting stats for ${itemPath}:`, error);
-                    // Continue with next item if there's an error
-                }
-            }
-            
-            // Add directories to result
-            if (directories.length > 0) {
-                result += "\n\nDirectories:\n" + directories.sort().join("\n");
-            }
-            
-            // Add files to result
-            if (files.length > 0) {
-                result += "\n\nFiles:\n" + files.sort().join("\n");
-            }
-            
-            // Handle empty directory
-            if (directories.length === 0 && files.length === 0) {
-                result += "\nDirectory is empty.";
-            }
-            
-            return result;
-        } catch (error) {
-            return `Error listing directory: ${error.message}`;
-        }
-    },
-    
-    // Move a file
-    async move_file({ source, destination }) {
-        if (!isPathAllowed(source) || !isPathAllowed(destination)) {
-            return `Error: Access to source or destination is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            // Check if destination exists
-            try {
-                await fs.access(destination);
-                return `Error: Destination ${destination} already exists`;
-            } catch {
-                // This is good, destination should not exist
-            }
-            
-            // Create parent directory if needed
-            const destDir = path.dirname(destination);
-            await fs.mkdir(destDir, { recursive: true });
-            
-            // Move the file
-            await fs.rename(source, destination);
-            return `Successfully moved ${source} to ${destination}`;
-        } catch (error) {
-            return `Error moving file: ${error.message}`;
-        }
-    },
-    
-    // Search for files
-    async search_files({ path: dirPath, pattern }) {
-        // Handle parameters that might be passed as objects
-        if (typeof dirPath === 'object') {
-            dirPath = dirPath.path || '';
-            pattern = dirPath.pattern || '';
-        }
-        
-        if (!dirPath) {
-            // If no path provided, default to the first allowed directory
-            dirPath = allowedDirs[0];
-        }
-        
-        if (!isPathAllowed(dirPath)) {
-            return `Error: Access to ${dirPath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            // Check if path exists and is a directory
-            try {
-                const stats = await fs.stat(dirPath);
-                if (!stats.isDirectory()) {
-                    return `Error: Path ${dirPath} is not a directory`;
-                }
-            } catch (error) {
-                return `Error: Path ${dirPath} does not exist`;
-            }
-            
-            // Function to search recursively
-            async function searchDir(dir, results = []) {
-                let items;
-                try {
-                    items = await fs.readdir(dir);
-                } catch (error) {
-                    console.error(`Error reading directory ${dir}:`, error);
-                    return results;
-                }
-                
-                for (const item of items) {
-                    const itemPath = path.join(dir, item);
-                    
-                    try {
-                        const itemStats = await fs.stat(itemPath);
-                        
-                        // Check if item matches pattern (case insensitive)
-                        if (pattern && item.toLowerCase().includes(pattern.toLowerCase())) {
-                            results.push({
-                                path: itemPath,
-                                isDirectory: itemStats.isDirectory()
-                            });
-                        }
-                        
-                        // Recurse into subdirectories
-                        if (itemStats.isDirectory()) {
-                            await searchDir(itemPath, results);
-                        }
-                    } catch (error) {
-                        console.error(`Error processing ${itemPath}:`, error);
-                        // Continue with next item
-                    }
-                }
-                
-                return results;
-            }
-            
-            // If no pattern provided, list everything
-            if (!pattern) {
-                return await tools.list_directory({ path: dirPath });
-            }
-            
-            // Perform the search
-            const matches = await searchDir(dirPath);
-            
-            if (matches.length === 0) {
-                return `No files matching '${pattern}' found in ${dirPath}`;
-            }
-            
-            let result = `Found ${matches.length} matches for '${pattern}' in ${dirPath}:\n`;
-            
-            // Sort matches by path
-            matches.sort((a, b) => a.path.localeCompare(b.path));
-            
-            // Format results
-            for (const match of matches) {
-                const itemType = match.isDirectory ? "[DIR]" : "[FILE]";
-                const relativePath = path.relative(dirPath, match.path);
-                result += `${itemType} ${relativePath}\n`;
-            }
-            
-            return result;
-        } catch (error) {
-            return `Error searching files: ${error.message}`;
-        }
-    },
-    
-    // Get file information
-    async get_file_info({ path: filePath }) {
-        // Handle path parameter that might be passed as an object
-        if (typeof filePath === 'object') {
-            filePath = filePath.path || '';
-        }
-        
-        if (!filePath) {
-            return `Error: Path parameter is required`;
-        }
-        
-        if (!isPathAllowed(filePath)) {
-            return `Error: Access to ${filePath} is not allowed. Allowed directories: ${allowedDirs.join(', ')}`;
-        }
-        
-        try {
-            // Check if path exists
-            try {
-                await fs.access(filePath);
-            } catch (error) {
-                return `Error: Path ${filePath} does not exist`;
-            }
-            
-            // Get file stats
-            const stats = await fs.stat(filePath);
-            const isDir = stats.isDirectory();
-            
-            // Create info object
-            const info = {
-                'Path': filePath,
-                'Type': isDir ? 'Directory' : 'File',
-                'Size': isDir ? 'N/A' : formatSize(stats.size),
-                'Created': formatTimestamp(stats.birthtime),
-                'Modified': formatTimestamp(stats.mtime),
-                'Accessed': formatTimestamp(stats.atime),
-                'Permissions': stats.mode.toString(8).slice(-3)
-            };
-            
-            // Format output
-            let result = "File Information:\n";
-            const maxKeyLen = Math.max(...Object.keys(info).map(key => key.length));
-            
-            for (const [key, value] of Object.entries(info)) {
-                result += `${key.padEnd(maxKeyLen)}: ${value}\n`;
-            }
-            
-            return result;
-        } catch (error) {
-            return `Error getting file info: ${error.message}`;
-        }
-    },
-    
-    // List allowed directories
-    async list_allowed_directories() {
-        let result = "This MCP server has access to the following directories:\n";
-        
-        for (let i = 0; i < allowedDirs.length; i++) {
-            result += `${i + 1}. ${allowedDirs[i]}\n`;
-        }
-        
-        return result;
+        res.json({
+            path: req.body.path,
+            content,
+            size: stats.size,
+            lastModified: stats.mtime
+        });
+    } catch (error) {
+        console.error('Error reading file:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path
+        });
     }
-};
+});
 
-// Add tool descriptions
-tools.read_file.description = 'Read the complete contents of a file from the file system';
-tools.read_multiple_files.description = 'Read the contents of multiple files simultaneously';
-tools.write_file.description = 'Create a new file or completely overwrite an existing file with new content';
-tools.create_directory.description = 'Create a new directory or ensure a directory exists';
-tools.list_directory.description = 'Get a detailed listing of all files and directories in a specified path';
-tools.move_file.description = 'Move or rename files and directories';
-tools.search_files.description = 'Recursively search for files and directories matching a pattern';
-tools.get_file_info.description = 'Retrieve detailed metadata about a file or directory';
-tools.list_allowed_directories.description = 'Returns the list of directories that this server is allowed to access';
-
-// Process JSON-RPC requests
-async function processRequest(request) {
-    if (!request.method) {
-        return {
-            jsonrpc: "2.0",
-            error: {
-                code: -32600,
-                message: "Invalid Request: method is required"
-            },
-            id: request.id || null
-        };
+app.post('/tools/write_file', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
+        }
+        
+        if (req.body.content === undefined) {
+            return res.status(400).json({ error: 'Content parameter is required' });
+        }
+        
+        const fullPath = resolvePath(req.body.path);
+        
+        // Create parent directories if they don't exist
+        const parentDir = path.dirname(fullPath);
+        if (!fs.existsSync(parentDir)) {
+            await fs.promises.mkdir(parentDir, { recursive: true });
+        }
+        
+        // Write content to file
+        await fs.promises.writeFile(fullPath, req.body.content);
+        
+        // Get stats of the new file
+        const stats = fs.statSync(fullPath);
+        
+        res.json({
+            path: req.body.path,
+            size: stats.size,
+            lastModified: stats.mtime,
+            success: true
+        });
+    } catch (error) {
+        console.error('Error writing file:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path
+        });
     }
-    
-    if (request.method === 'listTools') {
-        // List all available tools
-        const toolList = Object.entries(tools).map(([name, fn]) => {
+});
+
+app.post('/tools/list_directory', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
+        }
+        
+        const fullPath = resolvePath(req.body.path);
+        
+        // Check if directory exists
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ 
+                error: 'Directory not found',
+                path: req.body.path
+            });
+        }
+        
+        // Check if it's a directory
+        const stats = fs.statSync(fullPath);
+        if (!stats.isDirectory()) {
+            return res.status(400).json({ 
+                error: 'Path is not a directory',
+                path: req.body.path
+            });
+        }
+        
+        // Read directory contents
+        const files = await fs.promises.readdir(fullPath);
+        
+        // Get details for each file/directory
+        const contents = await Promise.all(files.map(async (file) => {
+            const filePath = path.join(fullPath, file);
+            const fileStats = fs.statSync(filePath);
+            
             return {
-                name,
-                description: fn.description || 'No description available',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
+                name: file,
+                path: path.join(req.body.path, file).replace(/\\/g, '/'),
+                type: fileStats.isDirectory() ? 'directory' : 'file',
+                size: fileStats.size,
+                lastModified: fileStats.mtime
+            };
+        }));
+        
+        res.json({
+            path: req.body.path,
+            contents
+        });
+    } catch (error) {
+        console.error('Error listing directory:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path
+        });
+    }
+});
+
+app.post('/tools/create_directory', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
+        }
+        
+        const fullPath = resolvePath(req.body.path);
+        
+        // Create directory (and parent directories if they don't exist)
+        await fs.promises.mkdir(fullPath, { recursive: true });
+        
+        res.json({
+            path: req.body.path,
+            success: true
+        });
+    } catch (error) {
+        console.error('Error creating directory:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path
+        });
+    }
+});
+
+app.post('/tools/search_files', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
+        }
+        
+        if (!req.body.pattern) {
+            return res.status(400).json({ error: 'Pattern parameter is required' });
+        }
+        
+        const fullPath = resolvePath(req.body.path);
+        
+        // Check if directory exists
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ 
+                error: 'Directory not found',
+                path: req.body.path
+            });
+        }
+        
+        // Check if it's a directory
+        const stats = fs.statSync(fullPath);
+        if (!stats.isDirectory()) {
+            return res.status(400).json({ 
+                error: 'Path is not a directory',
+                path: req.body.path
+            });
+        }
+        
+        // Search for files matching pattern
+        const globPromise = promisify(glob);
+        const fullPattern = path.join(fullPath, req.body.pattern);
+        const matches = await globPromise(fullPattern);
+        
+        // Format results
+        const results = matches.map(match => {
+            const relativePath = path.relative(config.basePath, match);
+            const fileStats = fs.statSync(match);
+            
+            return {
+                name: path.basename(match),
+                path: `/${relativePath}`.replace(/\\/g, '/'),
+                type: fileStats.isDirectory() ? 'directory' : 'file',
+                size: fileStats.size,
+                lastModified: fileStats.mtime
             };
         });
         
-        return {
-            jsonrpc: "2.0",
-            result: {
-                tools: toolList
-            },
-            id: request.id
-        };
-    } else if (request.method === 'callTool') {
-        // Call a specific tool
-        const { name, arguments: args } = request.params;
-        
-        if (!name || !tools[name]) {
-            return {
-                jsonrpc: "2.0",
-                error: {
-                    code: -32601,
-                    message: `Tool '${name}' not found`
-                },
-                id: request.id
-            };
-        }
-        
-        try {
-            const result = await tools[name](args || {});
-            
-            return {
-                jsonrpc: "2.0",
-                result: {
-                    content: [
-                        {
-                            type: "text",
-                            text: result
-                        }
-                    ]
-                },
-                id: request.id
-            };
-        } catch (error) {
-            return {
-                jsonrpc: "2.0",
-                error: {
-                    code: -32603,
-                    message: error.message || "Internal error"
-                },
-                id: request.id
-            };
-        }
-    } else if (request.method === 'initialize') {
-        // Initialize the server
-        return {
-            jsonrpc: "2.0",
-            result: {
-                server: {
-                    name: "Standalone Filesystem Server",
-                    version: "1.0.0"
-                },
-                capabilities: {
-                    tools: {}
-                }
-            },
-            id: request.id
-        };
-    } else {
-        return {
-            jsonrpc: "2.0",
-            error: {
-                code: -32601,
-                message: `Method '${request.method}' not found`
-            },
-            id: request.id
-        };
+        res.json({
+            path: req.body.path,
+            pattern: req.body.pattern,
+            matches: results
+        });
+    } catch (error) {
+        console.error('Error searching files:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path,
+            pattern: req.body.pattern
+        });
     }
-}
+});
 
-// Start the server in the appropriate mode
-if (process.stdin.isTTY) {
-    // Interactive mode for testing
-    process.stdin.setEncoding('utf8');
-    console.log('\nInteractive testing mode. Enter requests in JSON-RPC format.');
-    console.log('Examples:');
-    console.log('  {"jsonrpc":"2.0","method":"listTools","params":{},"id":1}');
-    console.log('  {"jsonrpc":"2.0","method":"callTool","params":{"name":"list_directory","arguments":{"path":"'+allowedDirs[0]+'"}},"id":2}');
-    console.log('Enter "exit" to quit.\n');
-    
-    let buffer = '';
-    
-    process.stdin.on('data', async (data) => {
-        buffer += data;
-        
-        if (buffer.trim().toLowerCase() === 'exit') {
-            console.log('Exiting...');
-            process.exit(0);
+app.post('/tools/get_file_info', async (req, res) => {
+    try {
+        if (!req.body.path) {
+            return res.status(400).json({ error: 'Path parameter is required' });
         }
         
-        // Check if we have a complete JSON object
-        try {
-            const request = JSON.parse(buffer);
-            buffer = '';
-            
-            console.log(`\nProcessing request: ${JSON.stringify(request)}`);
-            
-            const response = await processRequest(request);
-            console.log('\nResponse:');
-            console.log(JSON.stringify(response, null, 2));
-            
-            console.log('\nEnter next request (or "exit" to quit):');
-        } catch (error) {
-            // Not a complete JSON object yet, or invalid JSON
-            if (buffer.endsWith('\n')) {
-                console.error('Invalid JSON. Please try again.');
-                buffer = '';
-                console.log('\nEnter next request (or "exit" to quit):');
+        const fullPath = resolvePath(req.body.path);
+        
+        // Check if file/directory exists
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ 
+                error: 'File or directory not found',
+                path: req.body.path
+            });
+        }
+        
+        // Get file/directory stats
+        const stats = fs.statSync(fullPath);
+        
+        res.json({
+            path: req.body.path,
+            exists: true,
+            isFile: stats.isFile(),
+            isDirectory: stats.isDirectory(),
+            size: stats.size,
+            created: stats.birthtime,
+            lastModified: stats.mtime,
+            lastAccessed: stats.atime,
+            permissions: {
+                readable: true, // Simplified, since we can read it if we got here
+                writable: true, // Simplified, would need more checks in production
+                executable: stats.mode & 0o111 ? true : false
             }
-        }
-    });
-} else {
-    // Stdin/Stdout mode for MCP
-    process.stdin.setEncoding('utf8');
-    
-    let buffer = '';
-    
-    process.stdin.on('data', async (data) => {
-        buffer += data;
-        
-        // Process complete lines
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep the incomplete line
-        
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            
-            try {
-                const request = JSON.parse(line);
-                const response = await processRequest(request);
-                console.log(JSON.stringify(response));
-            } catch (error) {
-                console.error(`Error processing request: ${error.message}`);
-                if (line) {
-                    try {
-                        // Try to extract an ID for the error response
-                        const parsed = JSON.parse(line);
-                        console.log(JSON.stringify({
-                            jsonrpc: "2.0",
-                            error: {
-                                code: -32700,
-                                message: "Parse error: " + error.message
-                            },
-                            id: parsed.id || null
-                        }));
-                    } catch {
-                        // Can't parse the request at all
-                        console.log(JSON.stringify({
-                            jsonrpc: "2.0",
-                            error: {
-                                code: -32700,
-                                message: "Parse error: " + error.message
-                            },
-                            id: null
-                        }));
-                    }
-                }
-            }
-        }
-    });
-    
-    process.stdin.on('end', () => {
-        process.exit(0);
-    });
-    
-    // Log server info to stderr (doesn't interfere with JSON-RPC communication)
-    console.error('Standalone MCP filesystem server running in stdin/stdout mode');
-    console.error('Allowed directories:', allowedDirs);
-}
+        });
+    } catch (error) {
+        console.error('Error getting file info:', error);
+        res.status(500).json({ 
+            error: error.message,
+            path: req.body.path
+        });
+    }
+});
 
-// Optionally, start an HTTP server for browser-based access
-if (process.env.HTTP_PORT) {
-    const port = parseInt(process.env.HTTP_PORT, 10) || 3001;
-    
-    const server = createServer(async (req, res) => {
-        if (req.method === 'POST') {
-            let body = '';
-            
-            req.on('data', chunk => {
-                body += chunk.toString();
-            });
-            
-            req.on('end', async () => {
-                try {
-                    const request = JSON.parse(body);
-                    const response = await processRequest(request);
-                    
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify(response));
-                } catch (error) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({
-                        jsonrpc: "2.0",
-                        error: {
-                            code: -32700,
-                            message: "Parse error: " + error.message
-                        },
-                        id: null
-                    }));
-                }
-            });
-        } else {
-            res.writeHead(405, { 'Content-Type': 'text/plain' });
-            res.end('Method Not Allowed');
-        }
+app.post('/tools/list_allowed_directories', (req, res) => {
+    res.json({
+        allowedDirectories: [config.basePath]
     });
-    
-    server.listen(port, () => {
-        console.error(`HTTP server running at http://localhost:${port}/`);
-    });
-}
+});
+
+// Start the server
+app.listen(config.port, () => {
+    console.log(`MCP Filesystem Server running on port ${config.port}`);
+    console.log(`Base path: ${config.basePath}`);
+    console.log(`Authentication: ${config.apiKey ? 'Enabled' : 'Disabled'}`);
+    console.log(`Debug mode: ${config.debug ? 'Enabled' : 'Disabled'}`);
+});

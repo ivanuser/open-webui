@@ -7,6 +7,102 @@ import { executeMCPTool } from './execute';
 // Export the executeMCPTool function
 export { executeMCPTool };
 
+// Standard MCP tool definitions
+export const mcpTools = [
+    {
+        name: "read_file",
+        description: "Read the contents of a file from the file system",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path to the file to read"
+                }
+            },
+            required: ["path"]
+        }
+    },
+    {
+        name: "write_file",
+        description: "Write content to a file in the file system",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path where to write the file"
+                },
+                content: {
+                    type: "string",
+                    description: "Content to write to the file"
+                }
+            },
+            required: ["path", "content"]
+        }
+    },
+    {
+        name: "list_directory",
+        description: "List contents of a directory in the file system",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path to the directory to list"
+                }
+            },
+            required: ["path"]
+        }
+    },
+    {
+        name: "create_directory",
+        description: "Create a new directory in the file system",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path where to create the directory"
+                }
+            },
+            required: ["path"]
+        }
+    },
+    {
+        name: "search_files",
+        description: "Search for files matching a pattern in a directory",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path to the directory to search in"
+                },
+                pattern: {
+                    type: "string",
+                    description: "Pattern to search for (glob pattern)"
+                }
+            },
+            required: ["path", "pattern"]
+        }
+    },
+    {
+        name: "get_file_info",
+        description: "Get detailed information about a file or directory",
+        parameters: {
+            type: "object",
+            properties: {
+                path: {
+                    type: "string",
+                    description: "Path to the file or directory"
+                }
+            },
+            required: ["path"]
+        }
+    }
+];
+
 // Helper function to get MCP servers from localStorage
 const getMCPServersFromStorage = () => {
 	if (typeof localStorage !== 'undefined') {
@@ -326,6 +422,28 @@ export function getMCPTools() {
 }
 
 /**
+ * Get the active MCP server
+ */
+export async function getActiveMCPServer() {
+    // Get from user settings
+    const currentSettings = get(settings);
+    const defaultServerId = currentSettings?.defaultMcpServer;
+    const servers = get(mcpServers) || [];
+    
+    // Get default server if it exists and is connected
+    if (defaultServerId) {
+        const server = servers.find(s => s.id === defaultServerId && s.status === 'connected');
+        if (server) return server;
+    }
+    
+    // If no default server, use the first connected server
+    const connectedServer = servers.find(s => s.status === 'connected');
+    if (connectedServer) return connectedServer;
+    
+    return null;
+}
+
+/**
  * Process an MCP tool call
  * @param {string} token - Authentication token
  * @param {Object} toolCall - Tool call object
@@ -360,6 +478,65 @@ export async function processToolCall(token, toolCall) {
 		tool: name,
 		args
 	});
+}
+
+/**
+ * Test connection to an MCP server
+ */
+export async function testMCPServerConnection(server) {
+    try {
+        // First try to fetch server info
+        const response = await fetch(`${server.url}/info`, {
+            headers: {
+                ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
+            }
+        });
+        
+        if (response.ok) {
+            const info = await response.json();
+            return {
+                success: true,
+                message: `Connected successfully to MCP server (${info.name || 'Unknown'})`,
+                serverInfo: info
+            };
+        } else {
+            return {
+                success: false,
+                message: `Failed to connect to MCP server: ${response.status} ${response.statusText}`
+            };
+        }
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to connect to MCP server: ${error.message}`
+        };
+    }
+}
+
+/**
+ * Get available tools from an MCP server
+ */
+export async function getMCPServerTools(server) {
+    if (!server || !server.url) {
+        return [];
+    }
+    
+    try {
+        const response = await fetch(`${server.url}/tools`, {
+            headers: {
+                ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
+            }
+        });
+        
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to get MCP server tools:', error);
+    }
+    
+    // If server doesn't expose tools endpoint, return standard filesystem tools
+    return mcpTools;
 }
 
 export async function getMCPServers(token) {

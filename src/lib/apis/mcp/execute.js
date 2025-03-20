@@ -1,58 +1,91 @@
-/**
- * MCP Tool Execution API
- * 
- * This module handles the execution of MCP tool calls by forwarding them to the appropriate
- * MCP server and returning the results.
- */
-
-import { WEBUI_API_BASE_URL } from '$lib/constants';
-import { mcpServers } from '$lib/stores';
-import { get } from 'svelte/store';
+// Enhanced tool execution for MCP
 
 /**
- * Execute an MCP tool call
- * @param {string} token - Authentication token
- * @param {Object} params - Tool call parameters
- * @param {string} params.serverId - ID of the MCP server
- * @param {string} params.tool - Name of the tool to call
- * @param {Object} params.args - Arguments for the tool call
- * @returns {Promise} Promise resolving to the tool call result
+ * Execute a tool call through the MCP server
+ * @param {Object} server - MCP server configuration
+ * @param {String} toolName - Name of the tool to execute
+ * @param {Object} toolInput - Input parameters for the tool
+ * @returns {Promise<Object>} - Result of the tool execution
  */
-export async function executeMCPTool(token, params) {
-    const { serverId, tool, args } = params;
-    
-    // Get the MCP server
-    const allServers = get(mcpServers) || [];
-    const server = allServers.find(s => s.id === serverId);
-    
-    if (!server) {
-        throw new Error(`MCP server with ID ${serverId} not found`);
+export async function executeTool(server, toolName, toolInput) {
+    if (!server || !server.url) {
+        throw new Error('MCP server not configured');
     }
     
-    if (server.status !== 'connected') {
-        throw new Error(`MCP server ${server.name} is not connected`);
-    }
-
     try {
-        // Call the API endpoint for MCP tool execution
-        const response = await fetch(`${WEBUI_API_BASE_URL}/api/mcp/execute`, {
+        // Different handling for filesystem tools to ensure proper execution
+        if (toolName === 'read_file' || toolName === 'write_file' || 
+            toolName === 'list_directory' || toolName === 'search_files') {
+            return await executeFilesystemTool(server, toolName, toolInput);
+        }
+        
+        // Generic tool execution
+        const response = await fetch(`${server.url}/tools/${toolName}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(token && { Authorization: `Bearer ${token}` })
+                ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
             },
-            body: JSON.stringify({ serverId, tool, args })
+            body: JSON.stringify(toolInput)
         });
-
+        
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Error executing MCP tool: ${response.statusText}`);
+            const errorText = await response.text();
+            throw new Error(`MCP server returned error: ${response.status} ${errorText}`);
         }
-
-        const result = await response.json();
-        return result.result;
+        
+        return await response.json();
     } catch (error) {
-        console.error('Error executing MCP tool:', error);
-        throw error;
+        console.error(`MCP tool execution error (${toolName}):`, error);
+        return {
+            error: true,
+            message: `Failed to execute tool: ${error.message}`
+        };
     }
 }
+
+/**
+ * Execute filesystem specific tools with proper path handling
+ */
+async function executeFilesystemTool(server, toolName, toolInput) {
+    // Special handling for filesystem operations to ensure proper path resolution
+    let endpoint = `${server.url}/tools/${toolName}`;
+    
+    // Normalize path parameter
+    let normalizedInput = { ...toolInput };
+    
+    if (toolInput.path) {
+        // Ensure path is properly formatted for the server
+        normalizedInput.path = toolInput.path.replace(/\\/g, '/');
+        
+        // Handle relative paths
+        if (!normalizedInput.path.startsWith('/')) {
+            normalizedInput.path = `/${normalizedInput.path}`;
+        }
+    }
+    
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
+        },
+        body: JSON.stringify(normalizedInput)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Filesystem tool error: ${errorText}`);
+        return {
+            error: true,
+            message: `Failed to execute filesystem operation: ${response.status} ${response.statusText}`
+        };
+    }
+    
+    return await response.json();
+}
+
+// Export default object
+export default {
+    executeTool
+};
