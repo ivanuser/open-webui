@@ -15,7 +15,6 @@ import time
 import json
 import platform
 from typing import Dict, List, Any, Optional, Tuple, Union
-import psutil
 import requests
 from urllib.parse import urlparse
 
@@ -80,6 +79,35 @@ class MCPServerController:
             args = server_config.get("args", [])
             env = server_config.get("env", {})
             
+            # Check if command is available
+            if command == "uv":
+                try:
+                    # Try to run uv --version to check if it exists
+                    subprocess.run([command, "--version"], 
+                                  capture_output=True, 
+                                  check=True)
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    # uv not found, fall back to npx
+                    logger.info("uv command not found, falling back to npx")
+                    command = "npx"
+                    
+                    # If args contain uv-specific commands, adjust them
+                    if args and args[0] == "run":
+                        args = ["-y"] + args[1:]
+            
+            # Handle uvx fallback to npx
+            if command == "uvx":
+                try:
+                    subprocess.run([command, "--version"], 
+                                  capture_output=True, 
+                                  check=True)
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    logger.info("uvx command not found, falling back to npx")
+                    command = "npx"
+                    
+                    if args:
+                        args = ["-y"] + args
+            
             # Add current environment
             full_env = os.environ.copy()
             full_env.update(env)
@@ -95,24 +123,32 @@ class MCPServerController:
             logger.info(f"Starting MCP server {server_id} with command: {command} {' '.join(args)}")
             
             # Handle Windows vs Unix process creation
-            if platform.system() == "Windows":
-                process = subprocess.Popen(
-                    [command] + args,
-                    env=full_env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-                )
-            else:
-                process = subprocess.Popen(
-                    [command] + args,
-                    env=full_env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    preexec_fn=os.setsid
-                )
+            try:
+                if platform.system() == "Windows":
+                    process = subprocess.Popen(
+                        [command] + args,
+                        env=full_env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                    )
+                else:
+                    process = subprocess.Popen(
+                        [command] + args,
+                        env=full_env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        preexec_fn=os.setsid
+                    )
+            except FileNotFoundError:
+                logger.error(f"Command not found: {command}")
+                return {
+                    "success": False,
+                    "status": "error",
+                    "message": f"Command not found: {command}. Please make sure it's installed."
+                }
             
             # Store process information
             process_info = {

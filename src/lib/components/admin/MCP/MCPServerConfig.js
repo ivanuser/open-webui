@@ -8,9 +8,9 @@ export const standardMCPServers = {
     filesystem: {
         name: "Filesystem",
         description: "Access files on the local filesystem",
-        package: "@modelcontextprotocol/server-filesystem",
+        package: "@modelcontextprotocol/server-filesystem@latest",
         defaultCommand: "npx",
-        defaultArgs: ["-y", "@modelcontextprotocol/server-filesystem"],
+        defaultArgs: ["-y", "@modelcontextprotocol/server-filesystem@latest"],
         configFields: [
             {
                 name: "basePath",
@@ -50,9 +50,9 @@ export const standardMCPServers = {
     memory: {
         name: "Memory",
         description: "Knowledge graph-based persistent memory system",
-        package: "@modelcontextprotocol/server-memory",
+        package: "@modelcontextprotocol/server-memory@latest",
         defaultCommand: "npx",
-        defaultArgs: ["-y", "@modelcontextprotocol/server-memory"],
+        defaultArgs: ["-y", "@modelcontextprotocol/server-memory@latest"],
         configFields: [
             {
                 name: "port",
@@ -67,9 +67,9 @@ export const standardMCPServers = {
     "brave-search": {
         name: "Brave Search",
         description: "Search the web using Brave Search API",
-        package: "@modelcontextprotocol/server-brave-search",
+        package: "@modelcontextprotocol/server-brave-search@latest",
         defaultCommand: "npx",
-        defaultArgs: ["-y", "@modelcontextprotocol/server-brave-search"],
+        defaultArgs: ["-y", "@modelcontextprotocol/server-brave-search@latest"],
         configFields: [
             {
                 name: "BRAVE_API_KEY",
@@ -92,9 +92,9 @@ export const standardMCPServers = {
     github: {
         name: "GitHub",
         description: "Access GitHub repositories and perform actions",
-        package: "@modelcontextprotocol/server-github",
+        package: "@modelcontextprotocol/server-github@latest",
         defaultCommand: "npx",
-        defaultArgs: ["-y", "@modelcontextprotocol/server-github"],
+        defaultArgs: ["-y", "@modelcontextprotocol/server-github@latest"],
         configFields: [
             {
                 name: "GITHUB_PERSONAL_ACCESS_TOKEN",

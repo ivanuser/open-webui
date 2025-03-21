@@ -13,7 +13,7 @@ MCP_SERVER_TEMPLATES = {
         "description": "Access and manipulate files in a directory",
         "type": "stdio",
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+        "args": ["-y", "@modelcontextprotocol/server-filesystem@latest"],
         "configFields": [
             {
                 "name": "path",
@@ -28,7 +28,7 @@ MCP_SERVER_TEMPLATES = {
         "description": "Search the web using Brave Search API",
         "type": "stdio",
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "args": ["-y", "@modelcontextprotocol/server-brave-search@latest"],
         "configFields": [
             {
                 "name": "BRAVE_API_KEY",
@@ -44,7 +44,7 @@ MCP_SERVER_TEMPLATES = {
         "description": "Access and manage GitHub repositories",
         "type": "stdio",
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "args": ["-y", "@modelcontextprotocol/server-github@latest"],
         "configFields": [
             {
                 "name": "GITHUB_PERSONAL_ACCESS_TOKEN",
@@ -60,7 +60,7 @@ MCP_SERVER_TEMPLATES = {
         "description": "Knowledge graph-based persistent memory",
         "type": "stdio",
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-memory"]
+        "args": ["-y", "@modelcontextprotocol/server-memory@latest"]
     }
 }
 
