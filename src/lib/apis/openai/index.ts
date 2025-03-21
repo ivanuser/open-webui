@@ -1,5 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-import { getMCPTools, processMCPModelResponse } from '$lib/components/chat/MCPHandler';
+import { getMCPTools, processMCPModelResponse, getActiveMCPServer } from '$lib/apis/mcp/tools';
 import { mcpServers, settings } from '$lib/stores';
 import { get } from 'svelte/store';
 
@@ -331,26 +331,6 @@ export const verifyOpenAIConnection = async (
 
 	return res;
 };
-
-/**
- * Get the active MCP server
- * @returns {Object|null} The active MCP server or null
- */
-export function getActiveMCPServer() {
-    const currentSettings = get(settings);
-    const servers = get(mcpServers) || [];
-    
-    // Check if there's a default server or any connected server
-    const defaultServerId = currentSettings?.defaultMcpServer;
-    
-    if (defaultServerId) {
-        const server = servers.find(s => s.id === defaultServerId && s.status === 'connected');
-        if (server) return server;
-    }
-    
-    // If no default, use the first connected server
-    return servers.find(s => s.status === 'connected') || null;
-}
 
 /**
  * Add MCP tools to the request if needed

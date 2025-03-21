@@ -6,6 +6,10 @@
 
 import { processToolCall } from '$lib/apis/mcp';
 import { extractToolCallsFromOllama } from '$lib/apis/ollama/mcp-integration';
+import { getMCPTools, processMCPModelResponse } from '$lib/apis/mcp/tools';
+
+// Re-export the functions from tools.js
+export { getMCPTools, processMCPModelResponse };
 
 /**
  * Processes a model response for tool calls
@@ -147,5 +151,7 @@ export default {
     processModelResponse,
     formatToolResults,
     createToolResultMessage,
-    enhanceSystemPromptWithMCP
+    enhanceSystemPromptWithMCP,
+    getMCPTools,
+    processMCPModelResponse
 };
