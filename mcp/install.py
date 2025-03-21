@@ -54,7 +54,7 @@ def install_package(dev=False):
 def install_modelcontextprotocol():
     """Install MCP package from PyPI"""
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "modelcontextprotocol>=0.2.0"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "mcp"])
         logger.info("modelcontextprotocol package installed successfully")
         return True
     except subprocess.CalledProcessError as e:
