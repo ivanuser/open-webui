@@ -1,6 +1,6 @@
 /**
  * MCP Server Configuration Manager
- * This module handles MCP server configuration and process management
+ * This module handles MCP server configuration and templates
  */
 
 // Define standard MCP server types and configs
@@ -30,6 +30,23 @@ export const standardMCPServers = {
             }
         ]
     },
+    "filesystem-py": {
+        name: "Filesystem (Python)",
+        description: "Access files on the local filesystem (Python implementation)",
+        package: "filesystem_mcp_server.py",
+        defaultCommand: "python",
+        defaultArgs: ["filesystem_mcp_server.py"],
+        configFields: [
+            {
+                name: "basePath",
+                label: "Base Directory Path",
+                description: "The directory path to provide access to",
+                type: "text",
+                required: true,
+                default: "/tmp"
+            }
+        ]
+    },
     memory: {
         name: "Memory",
         description: "Knowledge graph-based persistent memory system",
@@ -44,6 +61,31 @@ export const standardMCPServers = {
                 type: "number",
                 required: false,
                 default: 3501
+            }
+        ]
+    },
+    "brave-search": {
+        name: "Brave Search",
+        description: "Search the web using Brave Search API",
+        package: "@modelcontextprotocol/server-brave-search",
+        defaultCommand: "npx",
+        defaultArgs: ["-y", "@modelcontextprotocol/server-brave-search"],
+        configFields: [
+            {
+                name: "BRAVE_API_KEY",
+                label: "Brave API Key",
+                description: "Brave Search API Key",
+                type: "password",
+                required: true,
+                isEnv: true
+            },
+            {
+                name: "port",
+                label: "Port",
+                description: "Port to run the server on",
+                type: "number",
+                required: false,
+                default: 3502
             }
         ]
     },
@@ -68,7 +110,7 @@ export const standardMCPServers = {
                 description: "Port to run the server on",
                 type: "number",
                 required: false,
-                default: 3502
+                default: 3503
             }
         ]
     }
@@ -95,7 +137,7 @@ export function generateMCPServerConfig(serverConfig) {
     };
     
     // Add server-specific configuration based on type
-    if (type === 'filesystem' && serverConfig.basePath) {
+    if ((type === 'filesystem' || type === 'filesystem-py') && serverConfig.basePath) {
         defaultConfig.args.push(serverConfig.basePath);
     }
     
@@ -166,11 +208,14 @@ export function getMCPServerUrl(serverConfig) {
 function getDefaultPortForType(type) {
     switch (type) {
         case 'filesystem':
+        case 'filesystem-py':
             return 3500;
         case 'memory':
             return 3501;
-        case 'github':
+        case 'brave-search':
             return 3502;
+        case 'github':
+            return 3503;
         default:
             return 3500;
     }

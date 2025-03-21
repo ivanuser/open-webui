@@ -66,7 +66,7 @@
 		serverEnv = server.env || {};
 		
 		// Extract basePath from args if available
-		if (serverType === 'filesystem') {
+		if (serverType === 'filesystem' || serverType === 'filesystem-py') {
 			const pathArg = serverArgs[serverArgs.length - 1];
 			if (pathArg && !pathArg.startsWith('--')) {
 				basePath = pathArg;
@@ -110,7 +110,7 @@
 				serverArgs = [...config.defaultArgs];
 				
 				// Add basePath for filesystem type
-				if (serverType === 'filesystem') {
+				if (serverType === 'filesystem' || serverType === 'filesystem-py') {
 					serverArgs.push(basePath);
 				}
 				
@@ -124,7 +124,7 @@
 		// Validate form
 		nameError = !serverName.trim() ? 'Server name is required' : '';
 		
-		if (serverType === 'filesystem' && !useCustomCommand) {
+		if ((serverType === 'filesystem' || serverType === 'filesystem-py') && !useCustomCommand) {
 			basePathError = !basePath.trim() ? 'Base path is required' : '';
 		}
 		
@@ -259,7 +259,7 @@
                 </div>
                 
                 <!-- Base Path (for filesystem) -->
-                {#if serverType === 'filesystem'}
+                {#if serverType === 'filesystem' || serverType === 'filesystem-py'}
                     <div class="grid grid-cols-4 gap-4">
                         <label for="base-path" class="col-span-1 flex items-center text-sm font-medium">
                             Base Path
@@ -296,8 +296,24 @@
                     </div>
                 </div>
                 
-                <!-- GitHub Token (for github) -->
-                {#if serverType === 'github'}
+                <!-- Environment Variables -->
+                {#if serverType === 'brave-search' && !useCustomCommand}
+                    <div class="grid grid-cols-4 gap-4">
+                        <label for="brave-api-key" class="col-span-1 flex items-center text-sm font-medium">
+                            Brave API Key
+                        </label>
+                        <div class="col-span-3">
+                            <input 
+                                id="brave-api-key" 
+                                type="password" 
+                                class="w-full rounded border border-gray-300 dark:border-gray-700 dark:bg-gray-900 px-3 py-2"
+                                bind:value={serverEnv.BRAVE_API_KEY} 
+                            />
+                        </div>
+                    </div>
+                {/if}
+                
+                {#if serverType === 'github' && !useCustomCommand}
                     <div class="grid grid-cols-4 gap-4">
                         <label for="github-token" class="col-span-1 flex items-center text-sm font-medium">
                             GitHub Token

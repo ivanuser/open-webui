@@ -1,17 +1,17 @@
 /**
  * Ollama MCP Handler
  * 
- * This module provides functions for integrating MCP with Ollama API calls.
- * It handles enhancing requests with MCP tools and processing responses with tool calls.
+ * This module provides functions for handling MCP integration with Ollama API calls.
  */
 
-import { enhanceOllamaRequest, processOllamaMessage, enhanceMessagesWithToolResults } from '../mcp/ollamaMCPClient';
+import { enhanceOllamaRequestWithMCP, processOllamaResponseForMCP, enhanceMessagesWithToolResults } from './mcp-integration';
+import { getActiveMCPServer } from '../mcp';
 import { get } from 'svelte/store';
 import { settings, mcpServers } from '$lib/stores';
 
 /**
- * Check if MCP is enabled and should be included in requests
- * @returns {boolean} True if MCP is enabled
+ * Check if MCP is enabled for Ollama
+ * @returns {boolean} - True if MCP is enabled
  */
 export function isMCPEnabled() {
     const currentSettings = get(settings);
@@ -31,14 +31,7 @@ export function isMCPEnabled() {
 /**
  * Send a chat request to Ollama with MCP capabilities
  * @param {Object} options - Request options
- * @param {string} options.token - Authentication token
- * @param {Object} options.body - Request body
- * @param {string} options.baseUrl - Base URL for the API
- * @param {function} options.onChunk - Callback for streaming chunks
- * @param {function} options.onToolCall - Callback for tool calls
- * @param {function} options.onToolResult - Callback for tool results
- * @param {function} options.onComplete - Callback when the request is complete
- * @returns {Promise<Object>} The response data
+ * @returns {Promise<Object>} - Response data
  */
 export async function sendOllamaChatRequest(options) {
     const { token, body, baseUrl, onChunk, onToolCall, onToolResult, onComplete } = options;
@@ -73,7 +66,7 @@ export async function sendOllamaChatRequest(options) {
         }
         
         // MCP is enabled, enhance the request
-        const enhancedBody = await enhanceOllamaRequest(body);
+        const enhancedBody = await enhanceOllamaRequestWithMCP(body, token);
         
         // Make the request
         const response = await fetch(`${baseUrl}/api/chat`, {
@@ -106,29 +99,14 @@ export async function sendOllamaChatRequest(options) {
             const data = await response.json();
             
             // Check for tool calls
-            if (data.message && data.message.tool_calls && data.message.tool_calls.length > 0) {
-                if (onToolCall) onToolCall(data.message.tool_calls);
-                
-                // Process tool calls
-                const processedData = await processOllamaMessage(token, data.message);
-                
-                if (processedData.toolResults && onToolResult) {
-                    onToolResult(processedData.toolResults);
-                }
-                
-                // Modify the data with tool results
-                const enhancedData = {
-                    ...data,
-                    message: processedData
-                };
-                
-                if (onComplete) onComplete(enhancedData);
-                return enhancedData;
+            const processedData = await processOllamaResponseForMCP(data, token);
+            
+            if (processedData.toolResults && onToolResult) {
+                onToolResult(processedData.toolResults);
             }
             
-            // No tool calls, just return the data
-            if (onComplete) onComplete(data);
-            return data;
+            if (onComplete) onComplete(processedData);
+            return processedData;
         }
     } catch (error) {
         console.error('Error in Ollama chat request:', error);
@@ -141,7 +119,7 @@ export async function sendOllamaChatRequest(options) {
  * @param {Response} response - Fetch response
  * @param {Function} onChunk - Callback for each chunk
  * @param {Function} onComplete - Callback when streaming is complete
- * @returns {Promise<Object>} The complete response data
+ * @returns {Promise<Object>} - The complete response data
  */
 async function processStreamingResponse(response, onChunk, onComplete) {
     const reader = response.body.getReader();
@@ -220,7 +198,7 @@ async function processStreamingResponse(response, onChunk, onComplete) {
  * @param {Function} onToolCall - Callback for tool calls
  * @param {Function} onToolResult - Callback for tool results
  * @param {Function} onComplete - Callback when streaming is complete
- * @returns {Promise<Object>} The complete response data
+ * @returns {Promise<Object>} - The complete response data
  */
 async function processStreamingResponseWithTools(
     response, 
@@ -289,25 +267,15 @@ async function processStreamingResponseWithTools(
                     onChunk(data.message.content);
                 }
                 
-                // Check for tool calls in the final message
-                if (data.message && data.message.tool_calls && data.message.tool_calls.length > 0) {
-                    if (onToolCall) {
-                        onToolCall(data.message.tool_calls);
-                    }
-                    
-                    // Process tool calls
-                    const processedMessage = await processOllamaMessage(token, data.message);
-                    
-                    if (processedMessage.toolResults && onToolResult) {
-                        onToolResult(processedMessage.toolResults);
-                    }
-                    
-                    // Update the final data
-                    finalData = {
-                        ...data,
-                        message: processedMessage
-                    };
+                // Process the final message with potential tool calls
+                const processedData = await processOllamaResponseForMCP(data, token);
+                
+                if (processedData.toolResults && onToolResult) {
+                    onToolResult(processedData.toolResults);
                 }
+                
+                // Update the final data
+                finalData = processedData;
             } catch (error) {
                 console.error('Error parsing JSON from final buffer:', error);
             }
@@ -331,8 +299,14 @@ async function processStreamingResponseWithTools(
  * Update conversation messages with tool results
  * @param {Array} messages - Original conversation messages
  * @param {Array} toolResults - Tool call results
- * @returns {Array} Updated conversation messages
+ * @returns {Array} - Updated conversation messages
  */
 export function updateConversationWithToolResults(messages, toolResults) {
     return enhanceMessagesWithToolResults(messages, toolResults);
 }
+
+export default {
+    isMCPEnabled,
+    sendOllamaChatRequest,
+    updateConversationWithToolResults
+};

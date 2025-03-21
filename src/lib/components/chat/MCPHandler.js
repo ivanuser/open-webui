@@ -1,327 +1,151 @@
 /**
- * MCP Handler - For integration with OpenAI/Ollama models
+ * MCP Integration Handler for Chat
+ * 
+ * This module handles the integration of MCP tool calls with the chat interface.
  */
+
+import { processToolCall } from '$lib/apis/mcp';
+import { extractToolCallsFromOllama } from '$lib/apis/ollama/mcp-integration';
 
 /**
- * Prepares MCP system prompt for models
- * @param {Object} activeModel - The active model
- * @param {Array} tools - Available MCP tools
- * @returns {String} - Formatted system prompt
+ * Processes a model response for tool calls
+ * @param {string} response - Model response text
+ * @param {string} token - Authentication token
+ * @returns {Promise<Object>} - Processed response with tool results
  */
-export function prepareMCPSystemPrompt(activeModel, tools = []) {
-    if (!tools || tools.length === 0) {
+export async function processModelResponse(response, token) {
+    // Check if the response contains tool calls
+    const toolCalls = extractToolCallsFromOllama(response);
+    
+    if (!toolCalls || toolCalls.length === 0) {
+        return { 
+            hasToolCalls: false, 
+            response 
+        };
+    }
+    
+    // Process each tool call
+    const toolResults = [];
+    
+    for (const toolCall of toolCalls) {
+        try {
+            // Execute the tool
+            const result = await processToolCall(token, toolCall);
+            
+            // Format result
+            const resultStr = typeof result === 'object' 
+                ? JSON.stringify(result, null, 2) 
+                : String(result);
+            
+            // Add to results
+            toolResults.push({
+                tool: toolCall.name,
+                result: resultStr
+            });
+        } catch (error) {
+            console.error('Error processing tool call:', error);
+            
+            // Add error result
+            toolResults.push({
+                tool: toolCall.name,
+                error: error.message
+            });
+        }
+    }
+    
+    return {
+        hasToolCalls: true,
+        response,
+        toolCalls,
+        toolResults
+    };
+}
+
+/**
+ * Format tool results for display in chat
+ * @param {Array} toolResults - Tool execution results
+ * @returns {string} - Formatted tool results
+ */
+export function formatToolResults(toolResults) {
+    if (!toolResults || toolResults.length === 0) {
         return '';
     }
+    
+    let formattedResults = '';
+    
+    for (const result of toolResults) {
+        formattedResults += `\n**Tool Call Result**: ${result.tool}\n\n`;
+        
+        if (result.error) {
+            formattedResults += `**Error**: ${result.error}\n\n`;
+        } else {
+            formattedResults += "```\n" + result.result + "\n```\n\n";
+        }
+    }
+    
+    return formattedResults;
+}
 
-    // Format tools for the system prompt
-    let toolsPrompt = 'You have access to the following external tools:\n\n';
+/**
+ * Creates a follow-up message with tool results
+ * @param {Array} toolResults - Tool execution results
+ * @returns {Object} - Message object with tool results
+ */
+export function createToolResultMessage(toolResults) {
+    return {
+        role: 'system',
+        content: formatToolResults(toolResults),
+        isToolResult: true
+    };
+}
+
+/**
+ * Enhance a system prompt with MCP tool instructions
+ * @param {string} systemPrompt - Original system prompt
+ * @param {Array} tools - Available MCP tools
+ * @returns {string} - Enhanced system prompt
+ */
+export function enhanceSystemPromptWithMCP(systemPrompt, tools) {
+    if (!tools || tools.length === 0) {
+        return systemPrompt;
+    }
+    
+    let mcpPrompt = 'You have access to the following tools via the Model Context Protocol:\n\n';
     
     tools.forEach(tool => {
-        toolsPrompt += `Tool: ${tool.name}\n`;
-        toolsPrompt += `Description: ${tool.description}\n`;
-        toolsPrompt += `Parameters: ${JSON.stringify(tool.parameters, null, 2)}\n\n`;
+        const name = tool.function?.name || '';
+        const description = tool.function?.description || '';
+        
+        mcpPrompt += `- ${name}: ${description}\n`;
     });
     
-    // Add instructions for using tools
-    toolsPrompt += `\nTo use a tool, respond with a JSON object in this format:
+    mcpPrompt += `\nWhen you need to use a tool, respond with a JSON object in this format inside a code block:
+
 \`\`\`json
 {
-  "tool": "tool_name",
-  "tool_input": {
+  "action": "tool_name",
+  "params": {
     "param1": "value1",
     "param2": "value2"
   }
 }
 \`\`\`
 
-After I show you the tool result, please continue the conversation.
-IMPORTANT: When asked about files or directories, USE THE TOOLS instead of making up a response.
+Always wrap the JSON in a code block with \`\`\`json and \`\`\` markers.
+Use tools directly when they're appropriate for the task.
+Wait for tool results before continuing.
 `;
-
-    return toolsPrompt;
-}
-
-/**
- * Process model response to extract tool calls
- * @param {String} response - Raw model response
- * @param {Function} callback - Tool result callback
- * @returns {Object} - Processed response
- */
-export function processToolCalls(response, callback) {
-    if (!response) {
-        return { text: response, toolCalls: [] };
+    
+    if (systemPrompt) {
+        return `${systemPrompt}\n\n${mcpPrompt}`;
     }
     
-    try {
-        // Extract JSON blocks
-        const jsonRegex = /```json\n([\s\S]*?)\n```|({[\s\S]*?})/g;
-        const matches = [];
-        let match;
-        
-        while ((match = jsonRegex.exec(response)) !== null) {
-            if (match[1]) {
-                // JSON in code block
-                matches.push(match[1]);
-            } else if (match[2]) {
-                // Standalone JSON
-                matches.push(match[2]);
-            }
-        }
-        
-        if (matches.length === 0) {
-            return { text: response, toolCalls: [] };
-        }
-        
-        const toolCalls = [];
-        let processedResponse = response;
-        
-        // Process each potential tool call
-        for (const jsonStr of matches) {
-            try {
-                const toolCall = JSON.parse(jsonStr);
-                
-                // Check if this is a valid tool call
-                if (toolCall.tool && toolCall.tool_input) {
-                    // Add to tool calls
-                    toolCalls.push({
-                        tool: toolCall.tool,
-                        input: toolCall.tool_input
-                    });
-                    
-                    // Callback for handling tool execution
-                    if (callback) {
-                        callback(toolCalls);
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to parse potential tool call:', error);
-            }
-        }
-        
-        return { text: processedResponse, toolCalls };
-    } catch (error) {
-        console.error('Error processing tool calls:', error);
-        return { text: response, toolCalls: [] };
-    }
+    return mcpPrompt;
 }
 
-/**
- * Process MCP tool calls from OpenAI models
- * @param {String} token - Auth token
- * @param {Object} message - Model response message
- * @param {String} serverId - MCP server ID
- * @returns {Promise<Object>} - Processed message
- */
-export async function processMCPModelResponse(token, message, serverId) {
-    if (!message.tool_calls || message.tool_calls.length === 0) {
-        return message;
-    }
-    
-    try {
-        // Import the processToolCall function dynamically
-        let processToolCall;
-        try {
-            const mcpApi = await import('$lib/apis/mcp');
-            processToolCall = mcpApi.processToolCall;
-        } catch (error) {
-            console.error('Failed to import processToolCall:', error);
-            return message;
-        }
-        
-        // Process each tool call
-        const toolResults = [];
-        
-        for (const toolCall of message.tool_calls) {
-            try {
-                const result = await processToolCall(token, {
-                    serverId,
-                    tool: toolCall.function.name,
-                    args: JSON.parse(toolCall.function.arguments)
-                });
-                
-                toolResults.push({
-                    id: toolCall.id,
-                    type: toolCall.type,
-                    function: {
-                        name: toolCall.function.name,
-                        arguments: toolCall.function.arguments
-                    },
-                    result
-                });
-            } catch (error) {
-                console.error(`Error processing tool call ${toolCall.function.name}:`, error);
-            }
-        }
-        
-        // Add the tool results to the message
-        message.toolResults = toolResults;
-        
-        return message;
-    } catch (error) {
-        console.error('Error processing MCP tool calls:', error);
-        return message;
-    }
-}
-
-/**
- * Get MCP tools based on server type
- * @param {String} serverType - MCP server type
- * @returns {Array} - Tool definitions
- */
-export function getMCPTools(serverType) {
-    if (serverType === 'filesystem' || serverType === 'filesystem-py') {
-        return [
-            {
-                name: "list_directory",
-                description: "Lists all files and directories in the specified directory path",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "The absolute path to the directory"
-                        }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "read_file",
-                description: "Reads the content of a file",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "The absolute path to the file"
-                        }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "write_file",
-                description: "Creates a new file or overwrites an existing file",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string", 
-                            description: "The absolute path where the file should be created or overwritten"
-                        },
-                        content: {
-                            type: "string",
-                            description: "Content to write to the file"
-                        }
-                    },
-                    required: ["path", "content"]
-                }
-            },
-            {
-                name: "create_directory",
-                description: "Creates a new directory or ensures it exists",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "The absolute path where the directory should be created"
-                        }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "search_files",
-                description: "Searches for files matching a pattern in a directory",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "The absolute path to the directory to search in"
-                        },
-                        pattern: {
-                            type: "string",
-                            description: "The search pattern (glob format)"
-                        }
-                    },
-                    required: ["path", "pattern"]
-                }
-            },
-            {
-                name: "get_file_info",
-                description: "Gets detailed information about a file or directory",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        path: {
-                            type: "string",
-                            description: "The absolute path to the file or directory"
-                        }
-                    },
-                    required: ["path"]
-                }
-            }
-        ];
-    } else if (serverType === 'memory') {
-        return [
-            {
-                name: "store_memory",
-                description: "Stores information in the memory server",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        key: {
-                            type: "string",
-                            description: "The key to store the information under"
-                        },
-                        value: {
-                            type: "string",
-                            description: "The information to store"
-                        }
-                    },
-                    required: ["key", "value"]
-                }
-            },
-            {
-                name: "retrieve_memory",
-                description: "Retrieves information from the memory server",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        key: {
-                            type: "string",
-                            description: "The key to retrieve information for"
-                        }
-                    },
-                    required: ["key"]
-                }
-            },
-            {
-                name: "search_memory",
-                description: "Searches for information in the memory server",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        query: {
-                            type: "string",
-                            description: "The search query"
-                        }
-                    },
-                    required: ["query"]
-                }
-            }
-        ];
-    }
-    
-    return [];
-}
-
-// Default export with all functions
 export default {
-    prepareMCPSystemPrompt,
-    processToolCalls,
-    processMCPModelResponse,
-    getMCPTools
+    processModelResponse,
+    formatToolResults,
+    createToolResultMessage,
+    enhanceSystemPromptWithMCP
 };

@@ -1,41 +1,45 @@
-<script lang="ts">
-	import { getContext } from 'svelte';
-	import { mcpServers } from '$lib/stores';
-	
-	const i18n = getContext('i18n');
-	
-	// Initialize mcpServers if not already initialized
-	if (!$mcpServers) {
-		mcpServers.set([]);
-	}
-	
-	$: connectedServers = $mcpServers?.filter(server => server.status === 'connected') || [];
-	$: totalServers = $mcpServers?.length || 0;
-	$: serverStatus = connectedServers.length > 0 
-		? $i18n.t('Connected to {{count}} servers', { count: connectedServers.length })
-		: $i18n.t('Ready to connect');
+<!-- MCP Connection Status Component -->
+<script>
+    export let status = 'disconnected';
+    
+    function getStatusColor(status) {
+        switch (status) {
+            case 'running':
+                return 'bg-yellow-400';
+            case 'connected':
+                return 'bg-green-500';
+            case 'stopped':
+            case 'disconnected':
+                return 'bg-gray-400';
+            case 'error':
+                return 'bg-red-500';
+            default:
+                return 'bg-gray-400';
+        }
+    }
+    
+    function getStatusText(status) {
+        switch (status) {
+            case 'running':
+                return 'Running';
+            case 'connected':
+                return 'Connected';
+            case 'stopped':
+                return 'Stopped';
+            case 'disconnected':
+                return 'Disconnected';
+            case 'error':
+                return 'Error';
+            default:
+                return 'Unknown';
+        }
+    }
 </script>
 
-<div class="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 p-4 rounded-lg mb-4">
-	<h3 class="font-medium">{$i18n.t('MCP Connection Status')}</h3>
-	<p class="text-sm mt-1">
-		{$i18n.t('The MCP Connector allows you to connect to MCP servers to extend the capabilities of Open WebUI.')}
-	</p>
-	<div class="mt-2 text-xs border-t border-blue-200 dark:border-blue-700 pt-2">
-		{$i18n.t('Status')}: <span class="font-semibold">{serverStatus}</span>
-		{#if totalServers > 0}
-			<span class="ml-2">({connectedServers.length}/{totalServers} {$i18n.t('servers')})</span>
-		{/if}
-	</div>
-	
-	{#if connectedServers.length > 0}
-		<div class="mt-2 text-xs">
-			<div class="font-medium mb-1">{$i18n.t('Connected Servers')}:</div>
-			<ul class="list-disc list-inside">
-				{#each connectedServers as server}
-					<li>{server.name} <span class="text-blue-500">({server.type})</span></li>
-				{/each}
-			</ul>
-		</div>
-	{/if}
+<div class="flex items-center ml-2">
+    <span 
+        class="w-2 h-2 rounded-full {getStatusColor(status)}"
+        title={getStatusText(status)}
+    ></span>
+    <span class="ml-1 text-xs text-gray-500">{getStatusText(status)}</span>
 </div>

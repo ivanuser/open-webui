@@ -1,95 +1,43 @@
-// Enhanced tool execution for MCP
+/**
+ * MCP Tool Execution
+ * 
+ * This module handles execution of MCP tools.
+ */
+
+import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 /**
- * Execute a tool call through the MCP server
- * @param {Object} server - MCP server configuration
- * @param {String} toolName - Name of the tool to execute
- * @param {Object} toolInput - Input parameters for the tool
- * @returns {Promise<Object>} - Result of the tool execution
+ * Execute an MCP tool
+ * @param {string} token - Authentication token
+ * @param {Object} params - Tool execution parameters
+ * @returns {Promise<Object>} - Tool execution result
  */
-export async function executeMCPTool(server, toolName, toolInput) {
-    if (!server || !server.url) {
-        throw new Error('MCP server not configured');
-    }
-    
+export async function executeMCPTool(token, params) {
     try {
-        // Different handling for filesystem tools to ensure proper execution
-        if (toolName === 'read_file' || toolName === 'write_file' || 
-            toolName === 'list_directory' || toolName === 'search_files') {
-            return await executeFilesystemTool(server, toolName, toolInput);
-        }
-        
-        // Generic tool execution
-        const response = await fetch(`${server.url}/tools/${toolName}`, {
+        const response = await fetch(`${WEBUI_API_BASE_URL}/api/mcp/tools/execute`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
+                Authorization: `Bearer ${token}`
             },
-            body: JSON.stringify(toolInput)
+            body: JSON.stringify(params)
         });
-        
+
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`MCP server returned error: ${response.status} ${errorText}`);
+            throw new Error(`Tool execution failed: ${errorText}`);
         }
-        
+
         return await response.json();
     } catch (error) {
-        console.error(`MCP tool execution error (${toolName}):`, error);
+        console.error('Error executing MCP tool:', error);
         return {
-            error: true,
-            message: `Failed to execute tool: ${error.message}`
+            success: false,
+            error: error.message
         };
     }
 }
 
-// Alias executeTool to maintain backward compatibility
-export const executeTool = executeMCPTool;
-
-/**
- * Execute filesystem specific tools with proper path handling
- */
-async function executeFilesystemTool(server, toolName, toolInput) {
-    // Special handling for filesystem operations to ensure proper path resolution
-    let endpoint = `${server.url}/tools/${toolName}`;
-    
-    // Normalize path parameter
-    let normalizedInput = { ...toolInput };
-    
-    if (toolInput.path) {
-        // Ensure path is properly formatted for the server
-        normalizedInput.path = toolInput.path.replace(/\\/g, '/');
-        
-        // Handle relative paths
-        if (!normalizedInput.path.startsWith('/')) {
-            normalizedInput.path = `/${normalizedInput.path}`;
-        }
-    }
-    
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
-        },
-        body: JSON.stringify(normalizedInput)
-    });
-    
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Filesystem tool error: ${errorText}`);
-        return {
-            error: true,
-            message: `Failed to execute filesystem operation: ${response.status} ${response.statusText}`
-        };
-    }
-    
-    return await response.json();
-}
-
-// Export default object
 export default {
-    executeMCPTool,
-    executeTool
+    executeMCPTool
 };

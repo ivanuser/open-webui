@@ -1,26 +1,15 @@
-fix: Resolve Extension Marketplace issues
+feat(mcp): Implement comprehensive MCP integration
 
-This commit fixes several issues with the Extension Marketplace integration:
+This commit adds a complete implementation of the Model Context Protocol (MCP) to Open WebUI:
 
-1. JSON Parsing Error:
-   - Updated marketplace configuration to use raw GitHub content URLs
-   - Fixed content type handling for API requests
+- Add MCP server management system for installing, starting, and stopping MCP servers
+- Implement backend API for MCP server and tool management
+- Create frontend UI components for managing MCP servers in the admin panel
+- Integrate MCP with Ollama models to enable tool usage
+- Support multiple server types (filesystem, memory, web search, etc.)
+- Add Python utilities for server management
+- Create documentation for using MCP in Open WebUI
 
-2. Extension Installation:
-   - Added server-side implementation for extension installation API
-   - Implemented proper error handling in extension installation
-   - Added support for marketplace extension installation
-
-3. UI Improvements:
-   - Reset mock data (ratings, downloads) to realistic initial values
-   - Removed duplicate extension entries in the marketplace
-   - Added proper loading and error states
-   - Improved empty state handling for new extensions
-
-4. Security and Performance:
-   - Added proper authentication checks for admin API endpoints
-   - Implemented file download and validation for extensions
-   - Added placeholder implementation for extension package handling
-
-This ensures the marketplace can properly fetch extensions from the GitHub
-repository and users can install extensions directly from the marketplace.
+The implementation follows the standard MCP specification and works with both
+JavaScript and Python MCP servers. Users can now extend their AI models with
+tool capabilities through a standardized protocol.

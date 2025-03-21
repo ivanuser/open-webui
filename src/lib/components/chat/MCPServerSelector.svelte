@@ -1,160 +1,135 @@
-<script lang="ts">
-	import { mcpServers, settings } from '$lib/stores';
-	import { onMount, getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import Selector from './MCPServerSelector/Selector.svelte';
-	import Tooltip from '../common/Tooltip.svelte';
-	import { updateUserSettings } from '$lib/apis/users';
-	import { getMCPServers } from '$lib/apis/mcp';
-
-	const i18n = getContext('i18n');
-
-	export let selectedServer = '';
-	export let disabled = false;
-	export let showSetDefault = true;
-	
-	// Initialize mcpServers if not already initialized
-	if (!$mcpServers) {
-		mcpServers.set([]);
-	}
-
-	const saveDefaultServer = async () => {
-		if (!selectedServer) {
-			toast.error($i18n.t('Choose an MCP server before saving...'));
-			return;
-		}
-		
-		try {
-			// Update the settings - create a new settings object to ensure a clean update
-			const updatedSettings = { ...$settings } || {};
-			
-			// Make sure enabledMcpServers is an array
-			if (!updatedSettings.enabledMcpServers) {
-				updatedSettings.enabledMcpServers = [];
-			}
-			
-			// Make sure the selected server is in the enabled servers list
-			if (!updatedSettings.enabledMcpServers.includes(selectedServer)) {
-				updatedSettings.enabledMcpServers.push(selectedServer);
-			}
-			
-			// Set the default MCP server
-			updatedSettings.defaultMcpServer = selectedServer;
-			
-			// Update the store
-			settings.set(updatedSettings);
-			
-			// Save to localStorage for immediate persistence
-			if (typeof localStorage !== 'undefined') {
-				localStorage.setItem('userSettings', JSON.stringify(updatedSettings));
-			}
-			
-			// Update on the backend
-			const result = await updateUserSettings(localStorage.token, { ui: updatedSettings });
-			console.log('Settings updated on backend:', result);
-
-			toast.success($i18n.t('Default MCP server updated'));
-		} catch (error) {
-			console.error('Error saving default MCP server:', error);
-			toast.error($i18n.t('Failed to save default server. Please try again.'));
-		}
-	};
-	
-	onMount(async () => {
-		// Check if we need to fetch MCP servers
-		if (!$mcpServers || $mcpServers.length === 0) {
-			try {
-				const servers = await getMCPServers(localStorage.token);
-				
-				// Make sure to persist the servers to localStorage immediately
-				if (typeof localStorage !== 'undefined' && servers) {
-					localStorage.setItem('mcpServers', JSON.stringify(servers));
-				}
-				
-				mcpServers.set(servers);
-			} catch (error) {
-				console.error('Error fetching MCP servers in chat:', error);
-			}
-		}
-		
-		// First try to get the default server
-		if ($settings?.defaultMcpServer && !selectedServer) {
-			// Verify the default server exists and is connected
-			const defaultServer = $mcpServers?.find(s => s.id === $settings.defaultMcpServer);
-			if (defaultServer && defaultServer.status === 'connected') {
-				selectedServer = $settings.defaultMcpServer;
-			} 
-			// If default server exists but isn't connected, try to connect to it
-			else if (defaultServer) {
-				selectedServer = $settings.defaultMcpServer;
-				console.log('Default server exists but is not connected:', selectedServer);
-			}
-		}
-		// If no default is set, try to get the first enabled server
-		else if ($settings?.enabledMcpServers && $settings.enabledMcpServers.length > 0 && !selectedServer) {
-			// Find the first enabled server that's also connected
-			const connectedEnabledServer = $mcpServers?.find(
-				s => $settings.enabledMcpServers.includes(s.id) && s.status === 'connected'
-			);
-			
-			if (connectedEnabledServer) {
-				selectedServer = connectedEnabledServer.id;
-			} else {
-				// If no enabled and connected servers, just use the first enabled one
-				selectedServer = $settings.enabledMcpServers[0];
-			}
-		}
-		
-		// If we have a selected server, verify it exists in the mcpServers list
-		if (selectedServer && $mcpServers) {
-			const serverExists = $mcpServers.some(s => s.id === selectedServer);
-			if (!serverExists) {
-				// Reset the selection if the server no longer exists
-				selectedServer = '';
-				
-				// Also update settings if we're removing the default server
-				if ($settings?.defaultMcpServer === selectedServer) {
-					const updatedSettings = { ...$settings };
-					updatedSettings.defaultMcpServer = null;
-					settings.set(updatedSettings);
-					
-					// Also update localStorage and backend
-					if (typeof localStorage !== 'undefined') {
-						localStorage.setItem('userSettings', JSON.stringify(updatedSettings));
-					}
-					await updateUserSettings(localStorage.token, { ui: updatedSettings });
-				}
-			}
-		}
-	});
+<!-- MCP Server Selector Component -->
+<script>
+    import { onMount } from 'svelte';
+    import { fade } from 'svelte/transition';
+    import { getMCPServers, connectToMCPServer, disconnectFromMCPServer } from '$lib/apis/mcp';
+    import { mcpServers, settings } from '$lib/stores';
+    import { get } from 'svelte/store';
+    
+    export let token = '';
+    export let disabled = false;
+    
+    let servers = [];
+    let selectedServerId = '';
+    let loading = true;
+    let error = null;
+    
+    // Subscribe to MCP servers store
+    $: {
+        servers = $mcpServers || [];
+        // Update the selected server if it's not in the list anymore
+        if (selectedServerId && !servers.some(s => s.id === selectedServerId)) {
+            selectedServerId = '';
+        }
+    }
+    
+    onMount(async () => {
+        await loadServers();
+        
+        // Set the currently active server
+        const currentSettings = get(settings);
+        const defaultServerId = currentSettings?.defaultMcpServer;
+        
+        if (defaultServerId && servers.some(s => s.id === defaultServerId && s.status === 'connected')) {
+            selectedServerId = defaultServerId;
+        }
+    });
+    
+    async function loadServers() {
+        loading = true;
+        error = null;
+        
+        try {
+            await getMCPServers(token);
+            loading = false;
+        } catch (err) {
+            console.error('Error loading MCP servers:', err);
+            error = 'Failed to load MCP servers';
+            loading = false;
+        }
+    }
+    
+    async function handleServerChange(event) {
+        const serverId = event.target.value;
+        
+        try {
+            // If deselecting (empty value)
+            if (!serverId && selectedServerId) {
+                await disconnectFromMCPServer(token, selectedServerId);
+                selectedServerId = '';
+                return;
+            }
+            
+            // If selecting a different server
+            if (serverId !== selectedServerId) {
+                // Disconnect from current server if any
+                if (selectedServerId) {
+                    await disconnectFromMCPServer(token, selectedServerId);
+                }
+                
+                // Connect to new server
+                if (serverId) {
+                    await connectToMCPServer(token, serverId);
+                }
+                
+                selectedServerId = serverId;
+            }
+        } catch (err) {
+            console.error('Error changing MCP server:', err);
+            error = `Failed to change MCP server: ${err.message}`;
+            
+            // Reset to previous selection
+            selectedServerId = event.target.dataset.previous || '';
+        }
+    }
 </script>
 
-<div class="flex flex-col w-full items-start">
-	<div class="flex w-full">
-		<div class="w-full">
-			<Selector
-				id="mcp-server"
-				placeholder={$i18n.t('Select MCP Server')}
-				bind:value={selectedServer}
-				on:select={(event) => {
-					const server = event.detail.server;
-					// Ensure the server is connected if it was selected
-					if (server.status !== 'connected') {
-						toast.info($i18n.t('Connect to the MCP server to use it'));
-					}
-				}}
-			/>
-		</div>
-	</div>
+<div class="mcp-server-selector">
+    {#if loading}
+        <div class="flex justify-center py-1">
+            <div class="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+        </div>
+    {:else if error}
+        <div class="text-xs text-red-500 mt-1" transition:fade>
+            {error}
+            <button 
+                class="text-blue-500 hover:underline ml-1"
+                on:click={loadServers}
+            >
+                Retry
+            </button>
+        </div>
+    {:else}
+        <div class="relative">
+            <select
+                class="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 pl-2 pr-7 text-sm"
+                bind:value={selectedServerId}
+                data-previous={selectedServerId}
+                on:change={handleServerChange}
+                disabled={disabled}
+            >
+                <option value="">-- No MCP Server --</option>
+                {#each servers.filter(s => s.status === 'running') as server}
+                    <option 
+                        value={server.id}
+                        selected={selectedServerId === server.id}
+                    >
+                        {server.name}
+                    </option>
+                {/each}
+            </select>
+            
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </div>
+        </div>
+        
+        {#if selectedServerId}
+            <div class="text-xs text-gray-500 mt-1">
+                Using MCP Server: {servers.find(s => s.id === selectedServerId)?.name}
+            </div>
+        {/if}
+    {/if}
 </div>
-
-{#if showSetDefault && selectedServer}
-	<div class="flex justify-start w-full mt-2">
-		<button 
-			on:click={saveDefaultServer}
-			class="text-xs px-2 py-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-		>
-			{$i18n.t('Set as default')}
-		</button>
-	</div>
-{/if}

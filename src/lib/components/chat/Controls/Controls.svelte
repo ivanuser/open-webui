@@ -3,6 +3,8 @@
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { get } from 'svelte/store';
 	import { settings, mcpServers } from '$lib/stores';
+	import { getMCPTools, getActiveMCPServer } from '$lib/apis/mcp';
+	import MCPInstructions from './MCPInstructions.svelte';
 
 	export let messages = [];
 	export let generating = false;
@@ -20,6 +22,7 @@
 
 	const dispatch = createEventDispatcher();
 	let activeMCPServer = null;
+	let activeMCPServerId = null;
 	let value = defaultStartupMessage || '';
 
 	// Simple text formatting function
@@ -58,15 +61,27 @@
 		handleHeight({ target: { value: '' } });
 
 		// Prepare MCP system prompt
-		let mcpSystemPrompt = '';
+		let finalSystemPrompt = systemPrompt || '';
+		
+		// Add MCP prompt if active
 		if (activeMCPServer) {
-			mcpSystemPrompt = prepareMCPPrompt(activeMCPServer.type);
+			const mcpPrompt = generateMCPSystemPrompt();
+			if (mcpPrompt) {
+				finalSystemPrompt = finalSystemPrompt 
+					? `${finalSystemPrompt}\n\n${mcpPrompt}` 
+					: mcpPrompt;
+			}
+		}
+		
+		// If no system prompt but model has template, use that
+		if (!finalSystemPrompt && activeModel?.promptTemplate) {
+			finalSystemPrompt = activeModel.promptTemplate;
 		}
 
 		// Create new message to send
 		const messageToSend = {
 			content: messageToSubmit,
-			prompt: systemPrompt || mcpSystemPrompt || activeModel?.promptTemplate || '',
+			prompt: finalSystemPrompt,
 			model: modelsSelected.length > 0 ? [...modelsSelected] : [activeModel],
 			submitted: true,
 			generating: true,
@@ -95,77 +110,78 @@
 		handleHeight({ target: { value } });
 	}
 
-	// Create MCP system prompt
-	function prepareMCPPrompt(serverType) {
-		// Basic MCP tools for filesystem
-		const tools = getToolsForType(serverType);
-		if (!tools.length) return '';
-
-		// Format tools string
-		let prompt = 'You have access to the following tools:\n\n';
+	// Generate MCP system prompt
+	function generateMCPSystemPrompt() {
+		if (!activeMCPServer) return '';
+		
+		// Get tools based on server type
+		const tools = getMCPTools();
+		if (!tools || tools.length === 0) return '';
+		
+		// Format the system prompt with tool definitions
+		let prompt = 'You have access to the following tools through the Model Context Protocol:\n\n';
 		
 		tools.forEach(tool => {
-			prompt += `Tool: ${tool.name}\n`;
-			prompt += `Description: ${tool.description}\n\n`;
+			const name = tool.function?.name || '';
+			const description = tool.function?.description || '';
+			prompt += `Tool: ${name}\n`;
+			prompt += `Description: ${description}\n\n`;
 		});
 		
-		prompt += `\nTo use a tool, respond with JSON in this format:
+		// Add server-specific instructions
+		if (activeMCPServer.type === 'filesystem' || activeMCPServer.type === 'filesystem-py') {
+			// Add allowed directory path
+			const allowedPath = activeMCPServer.args[activeMCPServer.args.length - 1] || '';
+			const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
+			
+			prompt += `\nThe filesystem tools only have access to paths under: ${allowedPath}\n`;
+			prompt += `Use ${isWindows ? 'backslashes' : 'forward slashes'} for paths.\n`;
+		}
+		
+		// Add tool usage instructions
+		prompt += `\nWhen you need to use a tool, respond with a JSON object in this format inside a code block:
+
 \`\`\`json
 {
-  "tool": "tool_name",
-  "tool_input": {
+  "action": "tool_name",
+  "params": {
     "param1": "value1",
     "param2": "value2"
   }
 }
 \`\`\`
 
-After using a tool, I'll show you the result, and then you should continue the conversation.
-IMPORTANT: When asked about files or directories, USE THE TOOLS instead of making up a response.`;
+Always wrap the JSON in a code block with \`\`\`json and \`\`\` markers.
+Use tools directly when they're appropriate for the task.
+Wait for tool results before continuing.
+`;
 		
 		return prompt;
 	}
 
-	// Get MCP tools based on server type
-	function getToolsForType(type) {
-		if (type === 'filesystem' || type === 'filesystem-py') {
-			return [
-				{
-					name: "list_directory",
-					description: "Lists files in a directory"
-				},
-				{
-					name: "read_file",
-					description: "Reads a file's contents"
-				},
-				{
-					name: "write_file",
-					description: "Creates or updates a file"
-				}
-			];
-		}
-		return [];
-	}
-
 	// Initialize MCP integration
-	function initializeMCPIntegration() {
+	async function initializeMCPIntegration() {
 		try {
+			// Get current settings
 			const currentSettings = get(settings);
-			const servers = get(mcpServers) || [];
-			
-			// Get connected servers
-			const connectedServers = servers.filter(server => server.status === 'connected');
-			
-			// Set active server from settings if available
 			const defaultServerId = currentSettings?.defaultMcpServer;
 			
+			// Get all MCP servers
+			const servers = get(mcpServers) || [];
+			const connectedServers = servers.filter(server => server.status === 'connected');
+			
+			// Set active server
 			if (defaultServerId) {
-				activeMCPServer = connectedServers.find(s => s.id === defaultServerId);
+				activeMCPServer = connectedServers.find(server => server.id === defaultServerId);
+				if (activeMCPServer) {
+					activeMCPServerId = activeMCPServer.id;
+				}
 			}
 			
 			// If no active server but we have connected servers, use the first one
 			if (!activeMCPServer && connectedServers.length > 0) {
 				activeMCPServer = connectedServers[0];
+				activeMCPServerId = activeMCPServer.id;
 			}
 		} catch (error) {
 			console.error('Error initializing MCP:', error);
@@ -185,6 +201,9 @@ IMPORTANT: When asked about files or directories, USE THE TOOLS instead of makin
 </script>
 
 <div class="flex flex-col w-full">
+	<!-- MCP Instructions -->
+	<MCPInstructions selectedMCPServer={activeMCPServerId} />
+	
 	<!-- Textarea for message input -->
 	<div class="relative flex flex-col w-full">
 		<slot name="textarea" {value} {handleContentChange} {submitMessage} {disabled} {placeholder} />
