@@ -1,136 +1,169 @@
-<!-- MCP Handler Component for Chat -->
+<!-- MCP Handler Component -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
+    import { extractToolCallsFromOllama, processOllamaResponseForMCP } from '$lib/apis/ollama/mcp-integration';
     import { processToolCall } from '$lib/apis/mcp';
-    import { extractToolCallsFromOllama } from '$lib/apis/ollama/mcp-integration';
     
     export let token = '';
     export let message = '';
-    export let processing = false;
+    export let isActive = false;
+    export let autoExecute = true;
+    export let showResults = true;
     
     const dispatch = createEventDispatcher();
+    
     let toolCalls = [];
     let toolResults = [];
-    let currentToolIndex = 0;
-    let showToolOutput = false;
+    let processing = false;
+    let error = null;
     
-    // Watch message for tool calls when processing stops
-    $: if (!processing && message) {
+    // Handle new message
+    $: if (isActive && message && message.trim()) {
         detectToolCalls(message);
     }
     
     // Detect tool calls in the message
-    async function detectToolCalls(text) {
-        if (!text) return;
-        
-        // Clear previous tool state
-        toolCalls = [];
-        toolResults = [];
-        currentToolIndex = 0;
-        showToolOutput = false;
-        
-        // Extract tool calls using regex
-        const extracted = extractToolCallsFromOllama(text);
-        
-        if (extracted && extracted.length > 0) {
-            toolCalls = extracted;
-            showToolOutput = true;
+    async function detectToolCalls(messageText) {
+        try {
+            // Extract tool calls from message
+            const extractedCalls = extractToolCallsFromOllama(messageText);
             
-            // Execute the first tool call
-            if (toolCalls.length > 0) {
-                executeNextToolCall();
+            // If no tool calls found, do nothing
+            if (!extractedCalls || extractedCalls.length === 0) {
+                toolCalls = [];
+                return;
             }
+            
+            // Update tool calls
+            toolCalls = extractedCalls;
+            
+            // Execute tools if auto-execute is enabled
+            if (autoExecute) {
+                executeToolCalls();
+            }
+        } catch (err) {
+            console.error('Error detecting tool calls:', err);
+            error = err.message || 'Failed to detect tool calls';
         }
     }
     
-    // Execute the current tool call
-    async function executeNextToolCall() {
-        if (currentToolIndex >= toolCalls.length) {
-            // All tool calls completed
-            finishToolExecution();
+    // Execute tool calls
+    async function executeToolCalls() {
+        if (!toolCalls || toolCalls.length === 0 || processing) {
             return;
         }
         
-        const toolCall = toolCalls[currentToolIndex];
+        processing = true;
+        error = null;
+        toolResults = [];
         
         try {
-            // Dispatch tool call event
-            dispatch('toolcall', { 
-                index: currentToolIndex, 
-                total: toolCalls.length,
-                name: toolCall.name,
-                arguments: toolCall.arguments
+            // Notify that we are processing tool calls
+            dispatch('toolCallsDetected', { toolCalls });
+            
+            // Execute each tool call sequentially
+            for (const toolCall of toolCalls) {
+                try {
+                    // Process the tool call
+                    const result = await processToolCall(token, toolCall);
+                    
+                    // Format the result
+                    const formattedResult = {
+                        role: 'tool',
+                        tool_call_id: toolCall.id || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        name: toolCall.name,
+                        content: typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+                    };
+                    
+                    // Add to results
+                    toolResults = [...toolResults, formattedResult];
+                    
+                    // Notify about the result
+                    dispatch('toolResult', { 
+                        toolCall, 
+                        result: formattedResult,
+                        allResults: toolResults
+                    });
+                } catch (err) {
+                    console.error(`Error executing tool call ${toolCall.name}:`, err);
+                    
+                    // Format error result
+                    const errorResult = {
+                        role: 'tool',
+                        tool_call_id: toolCall.id || `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        name: toolCall.name,
+                        content: `Error: ${err.message || 'Unknown error'}`
+                    };
+                    
+                    // Add to results
+                    toolResults = [...toolResults, errorResult];
+                    
+                    // Notify about the error
+                    dispatch('toolError', { 
+                        toolCall, 
+                        error: err,
+                        result: errorResult,
+                        allResults: toolResults
+                    });
+                }
+            }
+            
+            // Notify that all tool calls are processed
+            dispatch('toolCallsProcessed', { 
+                toolCalls,
+                toolResults
             });
-            
-            // Execute the tool call
-            const result = await processToolCall(token, toolCall);
-            
-            // Store the result
-            toolResults.push({
-                index: currentToolIndex,
-                name: toolCall.name,
-                result: result.success ? result.result : { error: result.error || 'Tool execution failed' },
-                success: result.success
-            });
-            
-            // Move to next tool
-            currentToolIndex++;
-            
-            // Dispatch tool result event
-            dispatch('toolresult', { 
-                index: currentToolIndex - 1, 
-                total: toolCalls.length,
-                name: toolCall.name,
-                result: result
-            });
-            
-            // Execute next tool
-            executeNextToolCall();
-        } catch (error) {
-            console.error('Error executing tool call:', error);
-            
-            // Store the error result
-            toolResults.push({
-                index: currentToolIndex,
-                name: toolCall.name,
-                result: { error: error.message || 'Tool execution failed' },
-                success: false
-            });
-            
-            // Move to next tool
-            currentToolIndex++;
-            
-            // Dispatch tool error event
-            dispatch('toolerror', { 
-                index: currentToolIndex - 1, 
-                total: toolCalls.length,
-                name: toolCall.name,
-                error: error.message
-            });
-            
-            // Execute next tool
-            executeNextToolCall();
+        } catch (err) {
+            console.error('Error executing tool calls:', err);
+            error = err.message || 'Failed to execute tool calls';
+            dispatch('error', { error });
+        } finally {
+            processing = false;
         }
     }
     
-    // Finish tool execution and continue the conversation
-    function finishToolExecution() {
-        if (toolResults.length === 0) return;
-        
-        // Format results for the model
-        const formattedResults = toolResults.map(result => {
-            return {
-                role: 'tool',
-                name: result.name,
-                content: typeof result.result === 'string' 
-                    ? result.result 
-                    : JSON.stringify(result.result, null, 2)
-            };
-        });
-        
-        // Dispatch event with all results
-        dispatch('toolscomplete', { results: formattedResults });
+    // Force execute tool calls
+    export function forceExecuteToolCalls() {
+        if (toolCalls && toolCalls.length > 0) {
+            executeToolCalls();
+        }
+    }
+    
+    // Reset the handler
+    export function reset() {
+        toolCalls = [];
+        toolResults = [];
+        error = null;
+        processing = false;
     }
 </script>
 
-<!-- No visible UI elements, this is a logic component -->
+{#if showResults && toolResults.length > 0}
+    <div class="mcp-tool-results mt-2">
+        {#each toolResults as result}
+            <div class="tool-result bg-gray-100 dark:bg-gray-800 p-3 rounded-md mb-2 text-sm">
+                <div class="flex items-center mb-1">
+                    <span class="font-bold text-blue-600 dark:text-blue-400">
+                        Tool: {result.name}
+                    </span>
+                </div>
+                <div class="whitespace-pre-wrap font-mono text-xs overflow-x-auto">
+                    {result.content}
+                </div>
+            </div>
+        {/each}
+    </div>
+{/if}
+
+{#if error}
+    <div class="bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-2 rounded-md mt-2 text-sm">
+        {error}
+    </div>
+{/if}
+
+{#if processing}
+    <div class="flex justify-center items-center py-2">
+        <div class="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+        <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Processing tool calls...</span>
+    </div>
+{/if}

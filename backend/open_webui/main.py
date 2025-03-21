@@ -1,153 +1,147 @@
-"""
-Open WebUI main application
-"""
-
-import logging
 import os
+import logging
+import importlib.metadata
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.inmemory import InMemoryBackend
-from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
 
-from . import constants
-from .config import get_config
-from .models.auth import User, get_current_active_user
+from .internal.paths import get_data_dir, get_server_dir, get_static_dir, get_storage_dir
+from .internal.version import __version__
+from .config import get_settings
+
+from .models.auth import get_current_active_user, User
+from .internal.logger import setup_logging
+
 from .routers import (
-    auths, 
-    channels, 
-    chats, 
-    configs, 
-    evaluations, 
-    files, 
-    folders, 
-    funcs, 
-    groups, 
-    images, 
-    memories, 
-    models, 
-    prompts, 
-    retrievals, 
-    users, 
-    mcp
+    api,
+    env,
+    auths,
+    configs,
+    models,
+    chat,
+    events,
+    tools,
+    users,
+    utils,
+    storage,
+    system,
+    knowledge,
+    evaluations,
+    functions,
+    mcp,
 )
-from .socket import ChatSocketManager
-from .tasks import schedule_tasks
 
-logger = logging.getLogger(__name__)
+tags_metadata = [
+    {"name": "api", "description": "External API operations"},
+    {"name": "env", "description": "Environment variables"},
+    {"name": "auths", "description": "Authentication operations"},
+    {"name": "configs", "description": "Configuration operations"},
+    {"name": "models", "description": "Model operations"},
+    {"name": "chat", "description": "Chat operations"},
+    {"name": "events", "description": "Event operations"},
+    {"name": "tools", "description": "Tools operations"},
+    {"name": "users", "description": "User operations"},
+    {"name": "utils", "description": "Utility operations"},
+    {"name": "storage", "description": "Storage operations"},
+    {"name": "system", "description": "System operations"},
+    {"name": "knowledge", "description": "Knowledge operations"},
+    {"name": "evaluations", "description": "Evaluations operations"},
+    {"name": "functions", "description": "Functions operations"},
+    {"name": "mcp", "description": "Model Context Protocol operations"},
+]
+
+settings = get_settings()
+logger = logging.getLogger("open-webui")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan event handler.
-    Initialize/cleanup code before the application starts/shutdowns.
-    """
-    # Initialize FastAPI Cache
-    FastAPICache.init(InMemoryBackend())
-
-    # Initialize FastAPI Limiter
-    redis_url = os.environ.get("REDIS_URL")
-
-    if not redis_url:
-        await FastAPILimiter.init(None)
-    else:
-        # Redis rate limiter implementation
-        import redis.asyncio as redis
-
-        redis_connection = redis.from_url(redis_url)
-        await FastAPILimiter.init(redis_connection)
-
-    # Schedule tasks
-    await schedule_tasks()
-
+    logger.debug("Starting application...")
     yield
-
-    # Cleanup code here
-
-
-# Initialize app
-app = FastAPI(
-    title="OpenWebUI API",
-    root_path=constants.ROOT_PATH,
-    lifespan=lifespan,
-)
-
-# Configure CORS middleware
-origins = ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Add rate limiter - 100 requests per minute
-rate_limiter = RateLimiter(times=100, seconds=60)
-
-# Include routers
-app.include_router(auths.router, prefix="/api")
-app.include_router(configs.router, prefix="/api")
-app.include_router(users.router, prefix="/api")
-app.include_router(chats.router, prefix="/api")
-app.include_router(channels.router, prefix="/api")
-app.include_router(models.router, prefix="/api")
-app.include_router(memories.router, prefix="/api")
-app.include_router(images.router, prefix="/api")
-app.include_router(files.router, prefix="/api")
-app.include_router(folders.router, prefix="/api")
-app.include_router(prompts.router, prefix="/api")
-app.include_router(retrievals.router, prefix="/api")
-app.include_router(evaluations.router, prefix="/api")
-app.include_router(funcs.router, prefix="/api")
-app.include_router(groups.router, prefix="/api")
-app.include_router(mcp.router, prefix="/api")
-
-# Socket manager
-chat_socket_manager = ChatSocketManager()
-
-# Mount socket
-app.add_websocket_route(
-    "/api/socket",
-    chat_socket_manager.handler,
-    dependencies=[Depends(get_current_active_user)],
-)
-
-# Mount static files
-static_files_dir = os.path.dirname(os.path.abspath(__file__)) + "/static"
-
-# Serve static files only if the directory exists (to avoid errors with unit tests)
-if os.path.exists(static_files_dir):
-    app.mount("/static", StaticFiles(directory=static_files_dir), name="static")
+    logger.debug("Shutting down application...")
 
 
-@app.get("/api/health", dependencies=[Depends(rate_limiter)])
-async def health() -> Dict[str, Any]:
-    """Health check endpoint"""
-    # Get config
-    config = get_config()
-
-    return {"healthy": True, "version": config.version}
-
-
-@app.get("/api/sse-health", dependencies=[Depends(rate_limiter)])
-async def sse_health(request: Request) -> Dict[str, Any]:
-    """SSE health check - checks if server sent events are working properly"""
-    supports_sse = False
-
-    if "text/event-stream" in request.headers.get("accept", ""):
-        supports_sse = True
-
-    return {"healthy": True, "supports_sse": supports_sse}
+def initialize_data_dirs():
+    """
+    Create the required directories if they don't exist
+    """
+    os.makedirs(get_data_dir(), exist_ok=True)
+    os.makedirs(get_static_dir(), exist_ok=True)
+    os.makedirs(get_storage_dir(), exist_ok=True)
+    os.makedirs(get_server_dir(), exist_ok=True)
 
 
-@app.get("/api/user", dependencies=[Depends(rate_limiter)])
-async def get_user(current_user: User = Depends(get_current_active_user)) -> Dict[str, Any]:
-    """Get current user"""
-    return {"user": current_user}
+def create_app(
+    memory_collection: Optional[List[str]] = None, init_dirs: bool = True
+) -> FastAPI:
+    """
+    Create the FastAPI application with specified settings
+
+    Args:
+        memory_collection: List of memory collection endpoints
+        init_dirs: Whether to initialize data directories
+
+    Returns:
+        The FastAPI application
+    """
+    setup_logging()
+
+    if init_dirs:
+        initialize_data_dirs()
+
+    app = FastAPI(
+        title="Open WebUI",
+        description="Open WebUI API",
+        version=__version__,
+        openapi_tags=tags_metadata,
+        lifespan=lifespan,
+    )
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Register routers
+    app.include_router(api.router)
+    app.include_router(env.router)
+    app.include_router(auths.router)
+    app.include_router(configs.router)
+    app.include_router(models.router)
+    app.include_router(chat.router)
+    app.include_router(events.router)
+    app.include_router(tools.router)
+    app.include_router(users.router)
+    app.include_router(utils.router)
+    app.include_router(storage.router)
+    app.include_router(system.router)
+    app.include_router(knowledge.router)
+    app.include_router(evaluations.router)
+    app.include_router(functions.router)
+    app.include_router(mcp.router)  # Add MCP router
+
+    # Mount static files (storage)
+    app.mount("/storage", StaticFiles(directory=get_storage_dir()), name="storage")
+
+    # Global exception handler
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error(f"Uncaught exception: {str(exc)}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+    @app.get("/api/me")
+    async def read_users_me(current_user: User = Depends(get_current_active_user)):
+        return current_user
+
+    return app

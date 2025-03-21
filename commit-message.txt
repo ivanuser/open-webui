@@ -1,15 +1,24 @@
-feat(mcp): Implement comprehensive MCP integration
+feat(mcp): Add comprehensive Model Context Protocol support
 
-This commit adds a complete implementation of the Model Context Protocol (MCP) to Open WebUI:
+This commit adds a new MCP (Model Context Protocol) integration for Open WebUI, allowing Ollama models to communicate with MCP servers for enhanced capabilities:
 
-- Add MCP server management system for installing, starting, and stopping MCP servers
-- Implement backend API for MCP server and tool management
-- Create frontend UI components for managing MCP servers in the admin panel
-- Integrate MCP with Ollama models to enable tool usage
-- Support multiple server types (filesystem, memory, web search, etc.)
-- Add Python utilities for server management
-- Create documentation for using MCP in Open WebUI
+- Server management: Add, start, stop, and monitor MCP servers from the UI
+- Tool integration: Enable Ollama models to use MCP tools
+- Admin interface: View server status and logs
+- CLI: Manage MCP servers from the command line
+- Documentation: Add detailed documentation for MCP features
 
-The implementation follows the standard MCP specification and works with both
-JavaScript and Python MCP servers. Users can now extend their AI models with
-tool capabilities through a standardized protocol.
+Key components:
+- Python backend with server manager and API endpoints
+- Frontend UI components in the admin panel
+- Chat UI integration for tool usage
+- Bridge between Ollama and MCP servers
+- Multiple transport types support (stdio, sse)
+
+Supported server types:
+- Filesystem: Access files and directories
+- Memory: Knowledge graph-based persistent memory
+- Brave Search: Web search capabilities
+- GitHub: Repository management
+
+This implementation follows best practices from successful MCP projects and is designed to be extensible for future MCP server types.
