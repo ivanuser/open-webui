@@ -120,8 +120,8 @@ ldap3==2.9.1
 firecrawl-py==1.12.0
 
 ## MCP Support
-uv==0.5.31
-modelcontextprotocol==0.1.5
+uv==0.6.8
+modelcontextprotocol==1.5.0
 websockets==12.0
 psutil==5.9.8
 aiohttp==3.9.3
