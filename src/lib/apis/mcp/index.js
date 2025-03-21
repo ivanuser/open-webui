@@ -342,34 +342,6 @@ export async function getMCPServerTools(token, id) {
 }
 
 /**
- * Execute an MCP tool
- * @param {string} token - Authentication token
- * @param {Object} params - Tool execution parameters
- * @returns {Promise<Object>} - Tool execution result
- */
-export async function executeMCPTool(token, params) {
-    try {
-        const response = await fetch(`${WEBUI_API_BASE_URL}/api/mcp/tools/execute`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify(params)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.statusText}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error executing MCP tool:', error);
-        throw error;
-    }
-}
-
-/**
  * Connect to an MCP server (for UI purposes)
  * @param {string} token - Authentication token
  * @param {string} id - Server ID
