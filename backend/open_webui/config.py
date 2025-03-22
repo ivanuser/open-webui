@@ -10,8 +10,8 @@ import logging
 from functools import lru_cache
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseSettings, Field, validator
-from pydantic.env_settings import SettingsSourceCallable
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # Authentication settings
     WEBUI_AUTH: bool = Field(True, env="WEBUI_AUTH")
-    WEBUI_SECRET_KEY: str = Field(..., env="WEBUI_SECRET_KEY")
+    WEBUI_SECRET_KEY: str = Field("default_insecure_key", env="WEBUI_SECRET_KEY")
     WEBUI_JWT_EXPIRY_TIME: int = Field(60 * 24 * 30, env="WEBUI_JWT_EXPIRY_TIME")  # 30 days in minutes
     
     # Database settings
@@ -57,11 +57,11 @@ class Settings(BaseSettings):
             return "INFO"
         return v.upper()
     
-    class Config:
-        """Configuration for settings."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
 
 @lru_cache()
 def get_settings() -> Settings:

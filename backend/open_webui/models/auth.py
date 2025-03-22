@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Union
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..config import get_settings
 
