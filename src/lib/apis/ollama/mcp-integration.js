@@ -1,84 +1,84 @@
 /**
- * Ollama MCP Integration
+ * MCP integration for Ollama models
  * 
- * This module provides integration between Ollama models and MCP servers.
+ * This module handles integration between Ollama models and MCP tools.
  */
 
-import { getActiveMCPServer, getMCPServerTools, processToolCall } from '../mcp';
+// Regex pattern to match tool call JSON blocks
+const TOOL_CALL_PATTERN = /```(?:json)?(?:\n)?\s*({[\s\S]*?})\s*```/g;
 
 /**
- * Enhance an Ollama API request with MCP capabilities
- * @param {Object} requestData - Original request data for Ollama API
- * @param {string} token - Authentication token
- * @returns {Promise<Object>} - Enhanced request data
+ * Extract tool calls from Ollama model response
+ * @param {string} text - Model response text
+ * @returns {Array} - Array of extracted tool calls
  */
-export async function enhanceOllamaRequestWithMCP(requestData, token) {
-    // Check if we have an active MCP server
-    const activeServer = await getActiveMCPServer();
-    if (!activeServer) {
-        return requestData;
+export function extractToolCallsFromOllama(text) {
+    if (!text) return [];
+    
+    // Collect all json code blocks
+    const jsonBlocks = [];
+    let match;
+    
+    while ((match = TOOL_CALL_PATTERN.exec(text)) !== null) {
+        try {
+            const jsonStr = match[1];
+            // Parse the JSON block
+            const jsonObj = JSON.parse(jsonStr);
+            
+            // Check if this looks like a tool call
+            if (jsonObj && jsonObj.action && typeof jsonObj.action === 'string') {
+                // Convert to format expected by MCP handler
+                jsonBlocks.push({
+                    name: jsonObj.action,
+                    arguments: jsonObj.params || {}
+                });
+            }
+        } catch (error) {
+            console.warn('Error parsing JSON block as tool call:', error);
+        }
     }
     
-    try {
-        // Get tools for the active server
-        const tools = await getMCPServerTools(token, activeServer.id);
-        
-        if (!tools || tools.length === 0) {
-            return requestData;
-        }
-        
-        // Generate a system prompt with MCP instructions
-        const mcpInstructions = generateMCPInstructions(activeServer, tools);
-        
-        // Start with a copy of the original request
-        const enhancedRequest = { ...requestData };
-        
-        // Add tools to the request
-        enhancedRequest.tools = tools;
-        enhancedRequest.tool_choice = "auto";
-        
-        // Add MCP instructions to system prompt
-        if (enhancedRequest.system) {
-            enhancedRequest.system = `${enhancedRequest.system}\n\n${mcpInstructions}`;
-        } else {
-            enhancedRequest.system = mcpInstructions;
-        }
-        
-        return enhancedRequest;
-    } catch (error) {
-        console.error('Error enhancing Ollama request with MCP:', error);
-        return requestData;
-    }
+    return jsonBlocks;
 }
 
 /**
- * Generate MCP instructions for system prompt
- * @param {Object} server - MCP server configuration
- * @param {Array} tools - Available tools
- * @returns {string} - MCP instructions
+ * Format MCP tool calls for Ollama system prompt
+ * @param {Array} tools - MCP tools
+ * @returns {string} - Formatted system prompt
  */
-function generateMCPInstructions(server, tools) {
-    // Create a special prompt that works with Ollama models
-    let prompt = `You have access to the following tools via the Model Context Protocol:\n\n`;
+export function formatMCPToolsForOllama(tools) {
+    if (!tools || tools.length === 0) {
+        return '';
+    }
+    
+    let systemPrompt = 'You have access to the following tools via the Model Context Protocol:\n\n';
     
     tools.forEach(tool => {
         const name = tool.function?.name || '';
         const description = tool.function?.description || '';
+        const parameters = tool.function?.parameters || {};
         
-        prompt += `- ${name}: ${description}\n`;
+        systemPrompt += `Tool: ${name}\n`;
+        systemPrompt += `Description: ${description}\n`;
+        
+        // Add parameters if available
+        if (parameters && Object.keys(parameters).length > 0) {
+            systemPrompt += 'Parameters:\n';
+            
+            // For object parameters, list properties
+            if (parameters.type === 'object' && parameters.properties) {
+                Object.entries(parameters.properties).forEach(([key, prop]) => {
+                    const required = parameters.required && parameters.required.includes(key) ? ' (required)' : '';
+                    systemPrompt += `- ${key}: ${prop.type}${required} - ${prop.description || ''}\n`;
+                });
+            }
+        }
+        
+        systemPrompt += '\n';
     });
     
-    // Add server-specific instructions
-    if (server.type === 'filesystem' || server.type === 'filesystem-py') {
-        // Get the allowed directory from server args
-        const allowedPath = server.args[server.args.length - 1] || '';
-        const isWindows = allowedPath.includes('\\') || allowedPath.includes(':');
-        
-        prompt += `\nThe filesystem tools only have access to paths under: ${allowedPath}\n`;
-        prompt += `Use ${isWindows ? 'backslashes' : 'forward slashes'} for paths.\n`;
-    }
-    
-    prompt += `\nWhen you need to use a tool, respond with a JSON object in this format inside a code block:
+    // Add instructions for using tools
+    systemPrompt += `\nWhen you need to use a tool, respond with a JSON object in this format inside a code block:
 
 \`\`\`json
 {
@@ -94,149 +94,41 @@ Always wrap the JSON in a code block with \`\`\`json and \`\`\` markers.
 Use tools directly when they're appropriate for the task.
 Wait for tool results before continuing.
 `;
-
-    return prompt;
+    
+    return systemPrompt;
 }
 
 /**
- * Extract tool calls from Ollama response
- * @param {string} response - Ollama response text
- * @returns {Array} - Array of tool calls, or empty array if none
+ * Create a tool result message
+ * @param {Array} toolResults - Tool execution results
+ * @returns {Object} - Tool result message object
  */
-export function extractToolCallsFromOllama(response) {
-    const toolCalls = [];
-    
-    // Look for JSON code blocks
-    const jsonBlockPattern = /```json\s*({[\s\S]*?})\s*```/g;
-    const matches = Array.from(response.matchAll(jsonBlockPattern));
-    
-    for (const match of matches) {
-        try {
-            const jsonStr = match[1];
-            const data = JSON.parse(jsonStr);
-            
-            // Check if it's a valid tool call
-            if (data.action && (data.params || data.parameters)) {
-                const params = data.params || data.parameters || {};
-                
-                toolCalls.push({
-                    name: data.action,
-                    arguments: params
-                });
-            }
-        } catch (error) {
-            console.warn('Error parsing JSON from Ollama response:', error);
-        }
-    }
-    
-    return toolCalls;
-}
-
-/**
- * Process an Ollama response for tool calls
- * @param {Object} response - Ollama API response
- * @param {string} token - Authentication token
- * @returns {Promise<Object>} - Processed response with tool results
- */
-export async function processOllamaResponseForMCP(response, token) {
-    if (!response || !response.message) {
-        return response;
-    }
-    
-    // Check if there are tool_calls in the response (newer Ollama versions)
-    if (response.message.tool_calls && response.message.tool_calls.length > 0) {
-        const toolResults = [];
-        
-        for (const toolCall of response.message.tool_calls) {
-            try {
-                // Execute the tool
-                const result = await processToolCall(token, toolCall);
-                
-                // Add to results
-                toolResults.push({
-                    role: 'tool',
-                    tool_call_id: toolCall.id || `call-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
-                    name: toolCall.function?.name || '',
-                    content: JSON.stringify(result)
-                });
-            } catch (error) {
-                console.error('Error processing tool call:', error);
-                
-                // Add error result
-                toolResults.push({
-                    role: 'tool',
-                    tool_call_id: toolCall.id || `call-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
-                    name: toolCall.function?.name || '',
-                    content: `Error: ${error.message}`
-                });
-            }
-        }
-        
-        // Return response with tool results
-        return {
-            ...response,
-            toolResults
-        };
-    }
-    
-    // Check for tool calls in the message content (for older models)
-    const content = response.message.content || '';
-    const toolCalls = extractToolCallsFromOllama(content);
-    
-    if (toolCalls.length > 0) {
-        const toolResults = [];
-        
-        for (const toolCall of toolCalls) {
-            try {
-                // Execute the tool
-                const result = await processToolCall(token, toolCall);
-                
-                // Add to results
-                toolResults.push({
-                    role: 'tool',
-                    name: toolCall.name,
-                    content: JSON.stringify(result)
-                });
-            } catch (error) {
-                console.error('Error processing tool call:', error);
-                
-                // Add error result
-                toolResults.push({
-                    role: 'tool',
-                    name: toolCall.name,
-                    content: `Error: ${error.message}`
-                });
-            }
-        }
-        
-        // Return response with tool results
-        return {
-            ...response,
-            toolResults
-        };
-    }
-    
-    // No tool calls, return original response
-    return response;
-}
-
-/**
- * Enhance messages with tool results
- * @param {Array} messages - Original messages
- * @param {Array} toolResults - Tool results
- * @returns {Array} - Enhanced messages
- */
-export function enhanceMessagesWithToolResults(messages, toolResults) {
+export function createOllamaToolResultMessage(toolResults) {
     if (!toolResults || toolResults.length === 0) {
-        return messages;
+        return null;
     }
     
-    return [...messages, ...toolResults];
+    let content = '';
+    
+    for (const result of toolResults) {
+        content += `\n**Tool Call Result**: ${result.tool}\n\n`;
+        
+        if (result.error) {
+            content += `**Error**: ${result.error}\n\n`;
+        } else {
+            content += "```\n" + result.result + "\n```\n\n";
+        }
+    }
+    
+    return {
+        role: 'assistant',
+        content,
+        isToolResult: true
+    };
 }
 
 export default {
-    enhanceOllamaRequestWithMCP,
     extractToolCallsFromOllama,
-    processOllamaResponseForMCP,
-    enhanceMessagesWithToolResults
+    formatMCPToolsForOllama,
+    createOllamaToolResultMessage
 };
