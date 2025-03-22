@@ -152,3 +152,7 @@ def create_app(
         return current_user
 
     return app
+
+
+# Create the app instance here for uvicorn to find
+app = create_app()
