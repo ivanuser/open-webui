@@ -1,206 +1,196 @@
+"""
+Authentication models for Open WebUI.
+"""
+
 import logging
-import uuid
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 
-from open_webui.internal.db import Base, get_db
-from open_webui.models.users import UserModel, Users
-from open_webui.env import SRC_LOG_LEVELS
+from jose import jwt, JWTError
+from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlalchemy import Boolean, Column, String, Text
-from open_webui.utils.auth import verify_password
 
-log = logging.getLogger(__name__)
-log.setLevel(SRC_LOG_LEVELS["MODELS"])
+from open_webui.models.users import UserModel, Users
+from open_webui.config import get_settings
 
-####################
-# DB MODEL
-####################
+# Create logger
+logger = logging.getLogger(__name__)
 
+# Get settings
+settings = get_settings()
 
-class Auth(Base):
-    __tablename__ = "auth"
+# Password context for hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-    id = Column(String, primary_key=True)
-    email = Column(String)
-    password = Column(Text)
-    active = Column(Boolean)
-
-
-class AuthModel(BaseModel):
-    id: str
-    email: str
-    password: str
-    active: bool = True
-
-
-####################
-# Forms
-####################
+# Authentication constants
+SECRET_KEY = settings.WEBUI_SECRET_KEY
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.WEBUI_JWT_EXPIRY_TIME
 
 
 class Token(BaseModel):
-    token: str
+    """Token model."""
+    
+    access_token: str
     token_type: str
 
 
-class ApiKey(BaseModel):
-    api_key: Optional[str] = None
+class TokenData(BaseModel):
+    """Token data model."""
+    
+    username: Optional[str] = None
 
 
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    name: str
-    role: str
-    profile_image_url: str
+class User(BaseModel):
+    """User model."""
+    
+    id: int
+    username: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    disabled: bool = False
+    is_admin: bool = False
+    ui_settings: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        """Pydantic configuration."""
+        
+        orm_mode = True
 
 
-class SigninResponse(Token, UserResponse):
-    pass
-
-
-class SigninForm(BaseModel):
-    email: str
+class UserCreate(BaseModel):
+    """User creation model."""
+    
+    username: str
     password: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
 
 
-class LdapForm(BaseModel):
-    user: str
-    password: str
+class UserInDB(User):
+    """User in database model."""
+    
+    hashed_password: str
 
 
-class ProfileImageUrlForm(BaseModel):
-    profile_image_url: str
+def verify_password(plain_password, hashed_password):
+    """Verify password against hash."""
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-class UpdateProfileForm(BaseModel):
-    profile_image_url: str
-    name: str
+def get_password_hash(password):
+    """Get hash of password."""
+    return pwd_context.hash(password)
 
 
-class UpdatePasswordForm(BaseModel):
-    password: str
-    new_password: str
+async def get_user(username: str):
+    """Get user by username."""
+    
+    # Use Users.get_by_username to fetch user from database
+    db_user = await Users.get_by_username(username)
+    
+    if db_user is None:
+        return None
+    
+    # Convert SQLAlchemy model to Pydantic model
+    user_dict = {
+        "id": db_user.id,
+        "username": db_user.username,
+        "email": db_user.email,
+        "full_name": db_user.full_name,
+        "disabled": db_user.disabled,
+        "is_admin": db_user.is_admin,
+        "hashed_password": db_user.hashed_password,
+        "ui_settings": db_user.ui_settings
+    }
+    
+    return UserInDB(**user_dict)
 
 
-class SignupForm(BaseModel):
-    name: str
-    email: str
-    password: str
-    profile_image_url: Optional[str] = "/user.png"
+async def authenticate_user(username: str, password: str):
+    """Authenticate user."""
+    
+    # Get user from database
+    user = await get_user(username)
+    
+    if not user:
+        return False
+    
+    # Verify password
+    if not verify_password(password, user.hashed_password):
+        return False
+    
+    return user
 
 
-class AddUserForm(SignupForm):
-    role: Optional[str] = "pending"
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Create access token."""
+    
+    to_encode = data.copy()
+    
+    # Set expiry time
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    
+    # Encode token
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return encoded_jwt
 
 
-class AuthsTable:
-    def insert_new_auth(
-        self,
-        email: str,
-        password: str,
-        name: str,
-        profile_image_url: str = "/user.png",
-        role: str = "pending",
-        oauth_sub: Optional[str] = None,
-    ) -> Optional[UserModel]:
-        with get_db() as db:
-            log.info("insert_new_auth")
-
-            id = str(uuid.uuid4())
-
-            auth = AuthModel(
-                **{"id": id, "email": email, "password": password, "active": True}
-            )
-            result = Auth(**auth.model_dump())
-            db.add(result)
-
-            user = Users.insert_new_user(
-                id, name, email, profile_image_url, role, oauth_sub
-            )
-
-            db.commit()
-            db.refresh(result)
-
-            if result and user:
-                return user
-            else:
-                return None
-
-    def authenticate_user(self, email: str, password: str) -> Optional[UserModel]:
-        log.info(f"authenticate_user: {email}")
-        try:
-            with get_db() as db:
-                auth = db.query(Auth).filter_by(email=email, active=True).first()
-                if auth:
-                    if verify_password(password, auth.password):
-                        user = Users.get_user_by_id(auth.id)
-                        return user
-                    else:
-                        return None
-                else:
-                    return None
-        except Exception:
+async def get_current_user(token: str):
+    """Get current user from token."""
+    
+    # Decode token
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        
+        if username is None:
             return None
-
-    def authenticate_user_by_api_key(self, api_key: str) -> Optional[UserModel]:
-        log.info(f"authenticate_user_by_api_key: {api_key}")
-        # if no api_key, return None
-        if not api_key:
-            return None
-
-        try:
-            user = Users.get_user_by_api_key(api_key)
-            return user if user else None
-        except Exception:
-            return False
-
-    def authenticate_user_by_trusted_header(self, email: str) -> Optional[UserModel]:
-        log.info(f"authenticate_user_by_trusted_header: {email}")
-        try:
-            with get_db() as db:
-                auth = db.query(Auth).filter_by(email=email, active=True).first()
-                if auth:
-                    user = Users.get_user_by_id(auth.id)
-                    return user
-        except Exception:
-            return None
-
-    def update_user_password_by_id(self, id: str, new_password: str) -> bool:
-        try:
-            with get_db() as db:
-                result = (
-                    db.query(Auth).filter_by(id=id).update({"password": new_password})
-                )
-                db.commit()
-                return True if result == 1 else False
-        except Exception:
-            return False
-
-    def update_email_by_id(self, id: str, email: str) -> bool:
-        try:
-            with get_db() as db:
-                result = db.query(Auth).filter_by(id=id).update({"email": email})
-                db.commit()
-                return True if result == 1 else False
-        except Exception:
-            return False
-
-    def delete_auth_by_id(self, id: str) -> bool:
-        try:
-            with get_db() as db:
-                # Delete User
-                result = Users.delete_user_by_id(id)
-
-                if result:
-                    db.query(Auth).filter_by(id=id).delete()
-                    db.commit()
-
-                    return True
-                else:
-                    return False
-        except Exception:
-            return False
+        
+        token_data = TokenData(username=username)
+    except JWTError:
+        return None
+    
+    # Get user from database
+    user = await get_user(token_data.username)
+    
+    if user is None:
+        return None
+    
+    return user
 
 
-Auths = AuthsTable()
+async def create_user(user_data: UserCreate):
+    """Create new user."""
+    
+    # Hash password
+    hashed_password = get_password_hash(user_data.password)
+    
+    # Create user data
+    user_dict = user_data.dict(exclude={"password"})
+    user_dict["hashed_password"] = hashed_password
+    
+    # Create user in database
+    db_user = await Users.create(user_dict)
+    
+    if db_user is None:
+        return None
+    
+    # Convert SQLAlchemy model to Pydantic model
+    user_out = User(
+        id=db_user.id,
+        username=db_user.username,
+        email=db_user.email,
+        full_name=db_user.full_name,
+        disabled=db_user.disabled,
+        is_admin=db_user.is_admin,
+        ui_settings=db_user.ui_settings
+    )
+    
+    return user_out
