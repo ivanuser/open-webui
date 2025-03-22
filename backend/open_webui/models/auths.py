@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from open_webui.models.users import UserModel, Users
 from open_webui.config import get_settings
@@ -52,10 +52,9 @@ class User(BaseModel):
     is_admin: bool = False
     ui_settings: Optional[Dict[str, Any]] = None
     
-    class Config:
-        """Pydantic configuration."""
-        
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class UserCreate(BaseModel):

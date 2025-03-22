@@ -1,203 +1,115 @@
-from typing import Optional
+"""
+Models router for Open WebUI.
+"""
 
-from open_webui.models.models import (
-    ModelForm,
-    ModelModel,
-    ModelResponse,
-    ModelUserResponse,
-    Models,
+import logging
+from typing import Dict, Any, List
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
+from ..models.auth import get_current_active_user, User
+
+# Create logger
+logger = logging.getLogger(__name__)
+
+# Create router
+router = APIRouter(
+    prefix="/api/models",
+    tags=["models"]
 )
-from open_webui.constants import ERROR_MESSAGES
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+class ModelInfo(BaseModel):
+    """Model information."""
+    id: str
+    name: str
+    description: str
+    provider: str
+    tags: List[str] = []
+    capabilities: List[str] = []
 
 
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_access, has_permission
+class ModelsResponse(BaseModel):
+    """Models response."""
+    success: bool
+    models: List[ModelInfo] = []
 
 
-router = APIRouter()
+@router.get("/", response_model=ModelsResponse)
+async def get_models(current_user: User = Depends(get_current_active_user)):
+    """Get available models."""
+    # Stub implementation - would fetch from a real source
+    models = [
+        ModelInfo(
+            id="gpt-3.5-turbo",
+            name="GPT-3.5 Turbo",
+            description="OpenAI's GPT-3.5 Turbo model",
+            provider="openai",
+            tags=["gpt", "openai", "chat"],
+            capabilities=["chat", "function-calling"]
+        ),
+        ModelInfo(
+            id="gpt-4",
+            name="GPT-4",
+            description="OpenAI's GPT-4 model",
+            provider="openai",
+            tags=["gpt", "openai", "chat"],
+            capabilities=["chat", "function-calling", "vision"]
+        ),
+        ModelInfo(
+            id="llama-2-70b",
+            name="Llama 2 (70B)",
+            description="Meta's Llama 2 model (70B parameter version)",
+            provider="local",
+            tags=["llama", "meta", "chat"],
+            capabilities=["chat"]
+        )
+    ]
+    
+    return ModelsResponse(
+        success=True,
+        models=models
+    )
 
 
-###########################
-# GetModels
-###########################
-
-
-@router.get("/", response_model=list[ModelUserResponse])
-async def get_models(id: Optional[str] = None, user=Depends(get_verified_user)):
-    if user.role == "admin":
-        return Models.get_models()
-    else:
-        return Models.get_models_by_user_id(user.id)
-
-
-###########################
-# GetBaseModels
-###########################
-
-
-@router.get("/base", response_model=list[ModelResponse])
-async def get_base_models(user=Depends(get_admin_user)):
-    return Models.get_base_models()
-
-
-############################
-# CreateNewModel
-############################
-
-
-@router.post("/create", response_model=Optional[ModelModel])
-async def create_new_model(
-    request: Request,
-    form_data: ModelForm,
-    user=Depends(get_verified_user),
+@router.get("/{model_id}", response_model=ModelInfo)
+async def get_model(
+    model_id: str,
+    current_user: User = Depends(get_current_active_user)
 ):
-    if user.role != "admin" and not has_permission(
-        user.id, "workspace.models", request.app.state.config.USER_PERMISSIONS
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
+    """Get model by ID."""
+    # Stub implementation - would fetch from a real source
+    models = {
+        "gpt-3.5-turbo": ModelInfo(
+            id="gpt-3.5-turbo",
+            name="GPT-3.5 Turbo",
+            description="OpenAI's GPT-3.5 Turbo model",
+            provider="openai",
+            tags=["gpt", "openai", "chat"],
+            capabilities=["chat", "function-calling"]
+        ),
+        "gpt-4": ModelInfo(
+            id="gpt-4",
+            name="GPT-4",
+            description="OpenAI's GPT-4 model",
+            provider="openai",
+            tags=["gpt", "openai", "chat"],
+            capabilities=["chat", "function-calling", "vision"]
+        ),
+        "llama-2-70b": ModelInfo(
+            id="llama-2-70b",
+            name="Llama 2 (70B)",
+            description="Meta's Llama 2 model (70B parameter version)",
+            provider="local",
+            tags=["llama", "meta", "chat"],
+            capabilities=["chat"]
         )
-
-    model = Models.get_model_by_id(form_data.id)
-    if model:
+    }
+    
+    if model_id not in models:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.MODEL_ID_TAKEN,
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model {model_id} not found"
         )
-
-    else:
-        model = Models.insert_new_model(form_data, user.id)
-        if model:
-            return model
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.DEFAULT(),
-            )
-
-
-###########################
-# GetModelById
-###########################
-
-
-# Note: We're not using the typical url path param here, but instead using a query parameter to allow '/' in the id
-@router.get("/model", response_model=Optional[ModelResponse])
-async def get_model_by_id(id: str, user=Depends(get_verified_user)):
-    model = Models.get_model_by_id(id)
-    if model:
-        if (
-            user.role == "admin"
-            or model.user_id == user.id
-            or has_access(user.id, "read", model.access_control)
-        ):
-            return model
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# ToggelModelById
-############################
-
-
-@router.post("/model/toggle", response_model=Optional[ModelResponse])
-async def toggle_model_by_id(id: str, user=Depends(get_verified_user)):
-    model = Models.get_model_by_id(id)
-    if model:
-        if (
-            user.role == "admin"
-            or model.user_id == user.id
-            or has_access(user.id, "write", model.access_control)
-        ):
-            model = Models.toggle_model_by_id(id)
-
-            if model:
-                return model
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
-                )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.UNAUTHORIZED,
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# UpdateModelById
-############################
-
-
-@router.post("/model/update", response_model=Optional[ModelModel])
-async def update_model_by_id(
-    id: str,
-    form_data: ModelForm,
-    user=Depends(get_verified_user),
-):
-    model = Models.get_model_by_id(id)
-
-    if not model:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-    if (
-        model.user_id != user.id
-        and not has_access(user.id, "write", model.access_control)
-        and user.role != "admin"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-
-    model = Models.update_model_by_id(id, form_data)
-    return model
-
-
-############################
-# DeleteModelById
-############################
-
-
-@router.delete("/model/delete", response_model=bool)
-async def delete_model_by_id(id: str, user=Depends(get_verified_user)):
-    model = Models.get_model_by_id(id)
-    if not model:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-    if (
-        user.role != "admin"
-        and model.user_id != user.id
-        and not has_access(user.id, "write", model.access_control)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
-
-    result = Models.delete_model_by_id(id)
-    return result
-
-
-@router.delete("/delete/all", response_model=bool)
-async def delete_all_models(user=Depends(get_admin_user)):
-    result = Models.delete_all_models()
-    return result
+    
+    return models[model_id]

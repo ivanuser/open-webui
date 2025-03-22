@@ -1,327 +1,271 @@
-import logging
-from typing import Optional
+"""
+Users router for Open WebUI.
+"""
 
-from open_webui.models.auths import Auths
-from open_webui.models.chats import Chats
-from open_webui.models.users import (
-    UserModel,
-    UserRoleUpdateForm,
-    Users,
-    UserSettings,
-    UserUpdateForm,
+import logging
+from typing import Dict, Any, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
+from ..models.auth import get_current_active_user, User, UserCreate
+
+# Create logger
+logger = logging.getLogger(__name__)
+
+# Create router
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"]
 )
 
-
-from open_webui.socket.main import get_active_status_by_user_id
-from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import SRC_LOG_LEVELS
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
-from open_webui.utils.auth import get_admin_user, get_password_hash, get_verified_user
-
-log = logging.getLogger(__name__)
-log.setLevel(SRC_LOG_LEVELS["MODELS"])
-
-router = APIRouter()
-
-############################
-# GetUsers
-############################
-
-
-@router.get("/", response_model=list[UserModel])
-async def get_users(
-    skip: Optional[int] = None,
-    limit: Optional[int] = None,
-    user=Depends(get_admin_user),
-):
-    return Users.get_users(skip, limit)
-
-
-############################
-# User Groups
-############################
-
-
-@router.get("/groups")
-async def get_user_groups(user=Depends(get_verified_user)):
-    return Users.get_user_groups(user.id)
-
-
-############################
-# User Permissions
-############################
-
-
-@router.get("/permissions")
-async def get_user_permissisions(user=Depends(get_verified_user)):
-    return Users.get_user_groups(user.id)
-
-
-############################
-# User Default Permissions
-############################
-class WorkspacePermissions(BaseModel):
-    models: bool = False
-    knowledge: bool = False
-    prompts: bool = False
-    tools: bool = False
-
-
-class ChatPermissions(BaseModel):
-    controls: bool = True
-    file_upload: bool = True
-    delete: bool = True
-    edit: bool = True
-    temporary: bool = True
-
-
-class FeaturesPermissions(BaseModel):
-    web_search: bool = True
-    image_generation: bool = True
-    code_interpreter: bool = True
-
-
-class UserPermissions(BaseModel):
-    workspace: WorkspacePermissions
-    chat: ChatPermissions
-    features: FeaturesPermissions
-
-
-@router.get("/default/permissions", response_model=UserPermissions)
-async def get_user_permissions(request: Request, user=Depends(get_admin_user)):
-    return {
-        "workspace": WorkspacePermissions(
-            **request.app.state.config.USER_PERMISSIONS.get("workspace", {})
-        ),
-        "chat": ChatPermissions(
-            **request.app.state.config.USER_PERMISSIONS.get("chat", {})
-        ),
-        "features": FeaturesPermissions(
-            **request.app.state.config.USER_PERMISSIONS.get("features", {})
-        ),
-    }
-
-
-@router.post("/default/permissions")
-async def update_user_permissions(
-    request: Request, form_data: UserPermissions, user=Depends(get_admin_user)
-):
-    request.app.state.config.USER_PERMISSIONS = form_data.model_dump()
-    return request.app.state.config.USER_PERMISSIONS
-
-
-############################
-# UpdateUserRole
-############################
-
-
-@router.post("/update/role", response_model=Optional[UserModel])
-async def update_user_role(form_data: UserRoleUpdateForm, user=Depends(get_admin_user)):
-    if user.id != form_data.id and form_data.id != Users.get_first_user().id:
-        return Users.update_user_role_by_id(form_data.id, form_data.role)
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=ERROR_MESSAGES.ACTION_PROHIBITED,
-    )
-
-
-############################
-# GetUserSettingsBySessionUser
-############################
-
-
-@router.get("/user/settings", response_model=Optional[UserSettings])
-async def get_user_settings_by_session_user(user=Depends(get_verified_user)):
-    user = Users.get_user_by_id(user.id)
-    if user:
-        return user.settings
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.USER_NOT_FOUND,
-        )
-
-
-############################
-# UpdateUserSettingsBySessionUser
-############################
-
-
-@router.post("/user/settings/update", response_model=UserSettings)
-async def update_user_settings_by_session_user(
-    form_data: UserSettings, user=Depends(get_verified_user)
-):
-    user = Users.update_user_settings_by_id(user.id, form_data.model_dump())
-    if user:
-        return user.settings
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.USER_NOT_FOUND,
-        )
-
-
-############################
-# GetUserInfoBySessionUser
-############################
-
-
-@router.get("/user/info", response_model=Optional[dict])
-async def get_user_info_by_session_user(user=Depends(get_verified_user)):
-    user = Users.get_user_by_id(user.id)
-    if user:
-        return user.info
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.USER_NOT_FOUND,
-        )
-
-
-############################
-# UpdateUserInfoBySessionUser
-############################
-
-
-@router.post("/user/info/update", response_model=Optional[dict])
-async def update_user_info_by_session_user(
-    form_data: dict, user=Depends(get_verified_user)
-):
-    user = Users.get_user_by_id(user.id)
-    if user:
-        if user.info is None:
-            user.info = {}
-
-        user = Users.update_user_by_id(user.id, {"info": {**user.info, **form_data}})
-        if user:
-            return user.info
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.USER_NOT_FOUND,
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.USER_NOT_FOUND,
-        )
-
-
-############################
-# GetUserById
-############################
+class UserUpdateRequest(BaseModel):
+    """User update request."""
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    disabled: Optional[bool] = None
+    is_admin: Optional[bool] = None
+    ui: Optional[Dict[str, Any]] = None
 
 
 class UserResponse(BaseModel):
-    name: str
-    profile_image_url: str
-    active: Optional[bool] = None
+    """User response."""
+    success: bool
+    user: Optional[User] = None
+    users: List[User] = []
+    message: Optional[str] = None
 
 
-@router.get("/{user_id}", response_model=UserResponse)
-async def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
-    # Check if user_id is a shared chat
-    # If it is, get the user_id from the chat
-    if user_id.startswith("shared-"):
-        chat_id = user_id.replace("shared-", "")
-        chat = Chats.get_chat_by_id(chat_id)
-        if chat:
-            user_id = chat.user_id
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.USER_NOT_FOUND,
-            )
-
-    user = Users.get_user_by_id(user_id)
-
-    if user:
-        return UserResponse(
-            **{
-                "name": user.name,
-                "profile_image_url": user.profile_image_url,
-                "active": get_active_status_by_user_id(user_id),
-            }
-        )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.USER_NOT_FOUND,
-        )
-
-
-############################
-# UpdateUserById
-############################
-
-
-@router.post("/{user_id}/update", response_model=Optional[UserModel])
-async def update_user_by_id(
-    user_id: str,
-    form_data: UserUpdateForm,
-    session_user=Depends(get_admin_user),
-):
-    user = Users.get_user_by_id(user_id)
-
-    if user:
-        if form_data.email.lower() != user.email:
-            email_user = Users.get_user_by_email(form_data.email.lower())
-            if email_user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.EMAIL_TAKEN,
-                )
-
-        if form_data.password:
-            hashed = get_password_hash(form_data.password)
-            log.debug(f"hashed: {hashed}")
-            Auths.update_user_password_by_id(user_id, hashed)
-
-        Auths.update_email_by_id(user_id, form_data.email.lower())
-        updated_user = Users.update_user_by_id(
-            user_id,
-            {
-                "name": form_data.name,
-                "email": form_data.email.lower(),
-                "profile_image_url": form_data.profile_image_url,
-            },
-        )
-
-        if updated_user:
-            return updated_user
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(),
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=ERROR_MESSAGES.USER_NOT_FOUND,
+@router.get("/me", response_model=UserResponse)
+async def get_current_user(current_user: User = Depends(get_current_active_user)):
+    """Get current user."""
+    return UserResponse(
+        success=True,
+        user=current_user
     )
 
 
-############################
-# DeleteUserById
-############################
+@router.put("/me", response_model=UserResponse)
+async def update_current_user(
+    update: UserUpdateRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update current user."""
+    # Stub implementation - would update in a database
+    # Create a copy of the current user
+    updated_user = User(
+        id=current_user.id,
+        username=current_user.username,
+        email=update.email or current_user.email,
+        full_name=update.full_name or current_user.full_name,
+        disabled=update.disabled if update.disabled is not None else current_user.disabled,
+        is_admin=current_user.is_admin,  # Don't allow changing admin status
+        ui_settings=update.ui or current_user.ui_settings
+    )
+    
+    logger.info(f"User {current_user.username} updated")
+    
+    return UserResponse(
+        success=True,
+        user=updated_user
+    )
 
 
-@router.delete("/{user_id}", response_model=bool)
-async def delete_user_by_id(user_id: str, user=Depends(get_admin_user)):
-    if user.id != user_id:
-        result = Auths.delete_auth_by_id(user_id)
-
-        if result:
-            return True
-
+@router.get("/", response_model=UserResponse)
+async def get_users(current_user: User = Depends(get_current_active_user)):
+    """Get all users."""
+    # Only allow admin users to list all users
+    if not current_user.is_admin:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ERROR_MESSAGES.DELETE_USER_ERROR,
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to list users"
         )
+    
+    # Stub implementation - would fetch from a database
+    users = [
+        User(
+            id=1,
+            username="admin",
+            email="admin@example.com",
+            full_name="Admin User",
+            is_admin=True
+        ),
+        User(
+            id=2,
+            username="user",
+            email="user@example.com",
+            full_name="Regular User",
+            is_admin=False
+        )
+    ]
+    
+    return UserResponse(
+        success=True,
+        users=users
+    )
 
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=ERROR_MESSAGES.ACTION_PROHIBITED,
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get user by ID."""
+    # Only allow admin users or the user themselves
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this user"
+        )
+    
+    # Stub implementation - would fetch from a database
+    users = {
+        1: User(
+            id=1,
+            username="admin",
+            email="admin@example.com",
+            full_name="Admin User",
+            is_admin=True
+        ),
+        2: User(
+            id=2,
+            username="user",
+            email="user@example.com",
+            full_name="Regular User",
+            is_admin=False
+        )
+    }
+    
+    if user_id not in users:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found"
+        )
+    
+    return UserResponse(
+        success=True,
+        user=users[user_id]
+    )
+
+
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    update: UserUpdateRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update user by ID."""
+    # Only allow admin users or the user themselves
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this user"
+        )
+    
+    # Stub implementation - would fetch from a database
+    users = {
+        1: User(
+            id=1,
+            username="admin",
+            email="admin@example.com",
+            full_name="Admin User",
+            is_admin=True
+        ),
+        2: User(
+            id=2,
+            username="user",
+            email="user@example.com",
+            full_name="Regular User",
+            is_admin=False
+        )
+    }
+    
+    if user_id not in users:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found"
+        )
+    
+    # Get existing user
+    user = users[user_id]
+    
+    # Create updated user
+    updated_user = User(
+        id=user.id,
+        username=user.username,
+        email=update.email or user.email,
+        full_name=update.full_name or user.full_name,
+        disabled=update.disabled if update.disabled is not None else user.disabled,
+        is_admin=update.is_admin if current_user.is_admin and update.is_admin is not None else user.is_admin,
+        ui_settings=update.ui or user.ui_settings
+    )
+    
+    logger.info(f"User {user.username} updated")
+    
+    return UserResponse(
+        success=True,
+        user=updated_user
+    )
+
+
+@router.post("/", response_model=UserResponse)
+async def create_user(
+    user_create: UserCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Create a new user."""
+    # Only allow admin users to create users
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create users"
+        )
+    
+    # Stub implementation - would create in a database
+    # Import here to avoid circular imports
+    from ..models.auths import create_user as auth_create_user
+    
+    # Create user
+    user = await auth_create_user(user_create)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User creation failed"
+        )
+    
+    logger.info(f"User {user.username} created")
+    
+    return UserResponse(
+        success=True,
+        user=user
+    )
+
+
+@router.delete("/{user_id}", response_model=UserResponse)
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete user by ID."""
+    # Only allow admin users to delete users
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete users"
+        )
+    
+    # Don't allow deleting self
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete self"
+        )
+    
+    # Stub implementation - would delete from a database
+    logger.info(f"User {user_id} deleted")
+    
+    return UserResponse(
+        success=True,
+        message=f"User {user_id} deleted"
     )

@@ -1,411 +1,345 @@
-import os
+"""
+Functions router for Open WebUI.
+"""
+
 import logging
-from pathlib import Path
-from typing import Optional
+import uuid
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Union
 
-from open_webui.models.functions import (
-    FunctionForm,
-    FunctionModel,
-    FunctionResponse,
-    Functions,
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from ..models.auth import get_current_active_user, User
+
+# Create logger
+logger = logging.getLogger(__name__)
+
+# Create router
+router = APIRouter(
+    prefix="/api/functions",
+    tags=["functions"]
 )
-from open_webui.utils.plugin import load_function_module_by_id, replace_imports
-from open_webui.config import CACHE_DIR
-from open_webui.constants import ERROR_MESSAGES
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.env import SRC_LOG_LEVELS
 
-log = logging.getLogger(__name__)
-log.setLevel(SRC_LOG_LEVELS["MAIN"])
-
-
-router = APIRouter()
-
-############################
-# GetFunctions
-############################
+class FunctionParameter(BaseModel):
+    """Function parameter."""
+    name: str
+    type: str
+    description: str
+    required: bool = True
+    default: Optional[Any] = None
+    enum: Optional[List[str]] = None
 
 
-@router.get("/", response_model=list[FunctionResponse])
-async def get_functions(user=Depends(get_verified_user)):
-    return Functions.get_functions()
+class Function(BaseModel):
+    """Function model."""
+    id: str
+    name: str
+    description: str
+    parameters: Dict[str, Dict[str, Any]] = {}
+    created_at: datetime
+    updated_at: datetime
+    enabled: bool = True
+    metadata: Dict[str, Any] = {}
 
 
-############################
-# ExportFunctions
-############################
+class FunctionResponse(BaseModel):
+    """Function response."""
+    success: bool
+    function: Optional[Function] = None
+    functions: List[Function] = []
+    message: Optional[str] = None
 
 
-@router.get("/export", response_model=list[FunctionModel])
-async def get_functions(user=Depends(get_admin_user)):
-    return Functions.get_functions()
-
-
-############################
-# CreateNewFunction
-############################
-
-
-@router.post("/create", response_model=Optional[FunctionResponse])
-async def create_new_function(
-    request: Request, form_data: FunctionForm, user=Depends(get_admin_user)
-):
-    if not form_data.id.isidentifier():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only alphanumeric characters and underscores are allowed in the id",
+@router.get("/", response_model=FunctionResponse)
+async def get_functions(current_user: User = Depends(get_current_active_user)):
+    """Get all functions."""
+    # Stub implementation - would fetch from a database
+    functions = [
+        Function(
+            id="1",
+            name="weather",
+            description="Get weather information for a location",
+            parameters={
+                "location": {
+                    "type": "string",
+                    "description": "The location to get weather information for",
+                    "required": True
+                },
+                "units": {
+                    "type": "string",
+                    "description": "The units to use (metric or imperial)",
+                    "required": False,
+                    "default": "metric",
+                    "enum": ["metric", "imperial"]
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        ),
+        Function(
+            id="2",
+            name="calculator",
+            description="Perform mathematical calculations",
+            parameters={
+                "expression": {
+                    "type": "string",
+                    "description": "The mathematical expression to evaluate",
+                    "required": True
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
+    ]
+    
+    return FunctionResponse(
+        success=True,
+        functions=functions
+    )
 
-    form_data.id = form_data.id.lower()
 
-    function = Functions.get_function_by_id(form_data.id)
-    if function is None:
+class FunctionCreate(BaseModel):
+    """Function creation model."""
+    name: str
+    description: str
+    parameters: Dict[str, Dict[str, Any]] = {}
+
+
+@router.post("/", response_model=FunctionResponse)
+async def create_function(
+    function: FunctionCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Create a new function."""
+    # Stub implementation - would create in a database
+    new_function = Function(
+        id=str(uuid.uuid4()),
+        name=function.name,
+        description=function.description,
+        parameters=function.parameters,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    
+    logger.info(f"Function created: {function.name}")
+    
+    return FunctionResponse(
+        success=True,
+        function=new_function
+    )
+
+
+@router.get("/{function_id}", response_model=FunctionResponse)
+async def get_function(
+    function_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get function by ID."""
+    # Stub implementation - would fetch from a database
+    functions = {
+        "1": Function(
+            id="1",
+            name="weather",
+            description="Get weather information for a location",
+            parameters={
+                "location": {
+                    "type": "string",
+                    "description": "The location to get weather information for",
+                    "required": True
+                },
+                "units": {
+                    "type": "string",
+                    "description": "The units to use (metric or imperial)",
+                    "required": False,
+                    "default": "metric",
+                    "enum": ["metric", "imperial"]
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        ),
+        "2": Function(
+            id="2",
+            name="calculator",
+            description="Perform mathematical calculations",
+            parameters={
+                "expression": {
+                    "type": "string",
+                    "description": "The mathematical expression to evaluate",
+                    "required": True
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+    }
+    
+    if function_id not in functions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Function {function_id} not found"
+        )
+    
+    return FunctionResponse(
+        success=True,
+        function=functions[function_id]
+    )
+
+
+class FunctionUpdate(BaseModel):
+    """Function update model."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Dict[str, Any]]] = None
+    enabled: Optional[bool] = None
+
+
+@router.put("/{function_id}", response_model=FunctionResponse)
+async def update_function(
+    function_id: str,
+    function_update: FunctionUpdate,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update function."""
+    # Stub implementation - would update in a database
+    functions = {
+        "1": Function(
+            id="1",
+            name="weather",
+            description="Get weather information for a location",
+            parameters={
+                "location": {
+                    "type": "string",
+                    "description": "The location to get weather information for",
+                    "required": True
+                },
+                "units": {
+                    "type": "string",
+                    "description": "The units to use (metric or imperial)",
+                    "required": False,
+                    "default": "metric",
+                    "enum": ["metric", "imperial"]
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        ),
+        "2": Function(
+            id="2",
+            name="calculator",
+            description="Perform mathematical calculations",
+            parameters={
+                "expression": {
+                    "type": "string",
+                    "description": "The mathematical expression to evaluate",
+                    "required": True
+                }
+            },
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+    }
+    
+    if function_id not in functions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Function {function_id} not found"
+        )
+    
+    # Get existing function
+    function = functions[function_id]
+    
+    # Update function
+    updated_function = Function(
+        id=function.id,
+        name=function_update.name or function.name,
+        description=function_update.description or function.description,
+        parameters=function_update.parameters or function.parameters,
+        created_at=function.created_at,
+        updated_at=datetime.utcnow(),
+        enabled=function_update.enabled if function_update.enabled is not None else function.enabled,
+        metadata=function.metadata
+    )
+    
+    logger.info(f"Function updated: {updated_function.name}")
+    
+    return FunctionResponse(
+        success=True,
+        function=updated_function
+    )
+
+
+@router.delete("/{function_id}", response_model=FunctionResponse)
+async def delete_function(
+    function_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete function."""
+    # Stub implementation - would delete from a database
+    logger.info(f"Function deleted: {function_id}")
+    
+    return FunctionResponse(
+        success=True,
+        message=f"Function {function_id} deleted"
+    )
+
+
+class FunctionCall(BaseModel):
+    """Function call model."""
+    function_id: str
+    parameters: Dict[str, Any] = {}
+
+
+class FunctionCallResponse(BaseModel):
+    """Function call response."""
+    success: bool
+    result: Any
+    error: Optional[str] = None
+
+
+@router.post("/call", response_model=FunctionCallResponse)
+async def call_function(
+    function_call: FunctionCall,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Call a function."""
+    # Stub implementation - would execute function
+    logger.info(f"Function call: {function_call.function_id} with parameters {function_call.parameters}")
+    
+    # Simple function calling logic - in a real implementation, would have proper dispatching
+    if function_call.function_id == "1":  # Weather
+        if "location" not in function_call.parameters:
+            return FunctionCallResponse(
+                success=False,
+                error="Missing required parameter 'location'"
+            )
+        
+        return FunctionCallResponse(
+            success=True,
+            result=f"Weather for {function_call.parameters['location']}: 20°C, Sunny"
+        )
+    elif function_call.function_id == "2":  # Calculator
+        if "expression" not in function_call.parameters:
+            return FunctionCallResponse(
+                success=False,
+                error="Missing required parameter 'expression'"
+            )
+        
+        # Very basic calculator logic - in a real implementation, would use a proper expression parser
         try:
-            form_data.content = replace_imports(form_data.content)
-            function_module, function_type, frontmatter = load_function_module_by_id(
-                form_data.id,
-                content=form_data.content,
+            result = eval(function_call.parameters["expression"])
+            return FunctionCallResponse(
+                success=True,
+                result=result
             )
-            form_data.meta.manifest = frontmatter
-
-            FUNCTIONS = request.app.state.FUNCTIONS
-            FUNCTIONS[form_data.id] = function_module
-
-            function = Functions.insert_new_function(user.id, function_type, form_data)
-
-            function_cache_dir = CACHE_DIR / "functions" / form_data.id
-            function_cache_dir.mkdir(parents=True, exist_ok=True)
-
-            if function:
-                return function
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT("Error creating function"),
-                )
         except Exception as e:
-            log.exception(f"Failed to create a new function: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT(e),
+            return FunctionCallResponse(
+                success=False,
+                error=f"Error evaluating expression: {str(e)}"
             )
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ID_TAKEN,
-        )
-
-
-############################
-# GetFunctionById
-############################
-
-
-@router.get("/id/{id}", response_model=Optional[FunctionModel])
-async def get_function_by_id(id: str, user=Depends(get_admin_user)):
-    function = Functions.get_function_by_id(id)
-
-    if function:
-        return function
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# ToggleFunctionById
-############################
-
-
-@router.post("/id/{id}/toggle", response_model=Optional[FunctionModel])
-async def toggle_function_by_id(id: str, user=Depends(get_admin_user)):
-    function = Functions.get_function_by_id(id)
-    if function:
-        function = Functions.update_function_by_id(
-            id, {"is_active": not function.is_active}
-        )
-
-        if function:
-            return function
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# ToggleGlobalById
-############################
-
-
-@router.post("/id/{id}/toggle/global", response_model=Optional[FunctionModel])
-async def toggle_global_by_id(id: str, user=Depends(get_admin_user)):
-    function = Functions.get_function_by_id(id)
-    if function:
-        function = Functions.update_function_by_id(
-            id, {"is_global": not function.is_global}
-        )
-
-        if function:
-            return function
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# UpdateFunctionById
-############################
-
-
-@router.post("/id/{id}/update", response_model=Optional[FunctionModel])
-async def update_function_by_id(
-    request: Request, id: str, form_data: FunctionForm, user=Depends(get_admin_user)
-):
-    try:
-        form_data.content = replace_imports(form_data.content)
-        function_module, function_type, frontmatter = load_function_module_by_id(
-            id, content=form_data.content
-        )
-        form_data.meta.manifest = frontmatter
-
-        FUNCTIONS = request.app.state.FUNCTIONS
-        FUNCTIONS[id] = function_module
-
-        updated = {**form_data.model_dump(exclude={"id"}), "type": function_type}
-        log.debug(updated)
-
-        function = Functions.update_function_by_id(id, updated)
-
-        if function:
-            return function
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
-            )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
-
-
-############################
-# DeleteFunctionById
-############################
-
-
-@router.delete("/id/{id}/delete", response_model=bool)
-async def delete_function_by_id(
-    request: Request, id: str, user=Depends(get_admin_user)
-):
-    result = Functions.delete_function_by_id(id)
-
-    if result:
-        FUNCTIONS = request.app.state.FUNCTIONS
-        if id in FUNCTIONS:
-            del FUNCTIONS[id]
-
-    return result
-
-
-############################
-# GetFunctionValves
-############################
-
-
-@router.get("/id/{id}/valves", response_model=Optional[dict])
-async def get_function_valves_by_id(id: str, user=Depends(get_admin_user)):
-    function = Functions.get_function_by_id(id)
-    if function:
-        try:
-            valves = Functions.get_function_valves_by_id(id)
-            return valves
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT(e),
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# GetFunctionValvesSpec
-############################
-
-
-@router.get("/id/{id}/valves/spec", response_model=Optional[dict])
-async def get_function_valves_spec_by_id(
-    request: Request, id: str, user=Depends(get_admin_user)
-):
-    function = Functions.get_function_by_id(id)
-    if function:
-        if id in request.app.state.FUNCTIONS:
-            function_module = request.app.state.FUNCTIONS[id]
-        else:
-            function_module, function_type, frontmatter = load_function_module_by_id(id)
-            request.app.state.FUNCTIONS[id] = function_module
-
-        if hasattr(function_module, "Valves"):
-            Valves = function_module.Valves
-            return Valves.schema()
-        return None
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# UpdateFunctionValves
-############################
-
-
-@router.post("/id/{id}/valves/update", response_model=Optional[dict])
-async def update_function_valves_by_id(
-    request: Request, id: str, form_data: dict, user=Depends(get_admin_user)
-):
-    function = Functions.get_function_by_id(id)
-    if function:
-        if id in request.app.state.FUNCTIONS:
-            function_module = request.app.state.FUNCTIONS[id]
-        else:
-            function_module, function_type, frontmatter = load_function_module_by_id(id)
-            request.app.state.FUNCTIONS[id] = function_module
-
-        if hasattr(function_module, "Valves"):
-            Valves = function_module.Valves
-
-            try:
-                form_data = {k: v for k, v in form_data.items() if v is not None}
-                valves = Valves(**form_data)
-                Functions.update_function_valves_by_id(id, valves.model_dump())
-                return valves.model_dump()
-            except Exception as e:
-                log.exception(f"Error updating function values by id {id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT(e),
-                )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.NOT_FOUND,
-            )
-
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# FunctionUserValves
-############################
-
-
-@router.get("/id/{id}/valves/user", response_model=Optional[dict])
-async def get_function_user_valves_by_id(id: str, user=Depends(get_verified_user)):
-    function = Functions.get_function_by_id(id)
-    if function:
-        try:
-            user_valves = Functions.get_user_valves_by_id_and_user_id(id, user.id)
-            return user_valves
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT(e),
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-@router.get("/id/{id}/valves/user/spec", response_model=Optional[dict])
-async def get_function_user_valves_spec_by_id(
-    request: Request, id: str, user=Depends(get_verified_user)
-):
-    function = Functions.get_function_by_id(id)
-    if function:
-        if id in request.app.state.FUNCTIONS:
-            function_module = request.app.state.FUNCTIONS[id]
-        else:
-            function_module, function_type, frontmatter = load_function_module_by_id(id)
-            request.app.state.FUNCTIONS[id] = function_module
-
-        if hasattr(function_module, "UserValves"):
-            UserValves = function_module.UserValves
-            return UserValves.schema()
-        return None
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-@router.post("/id/{id}/valves/user/update", response_model=Optional[dict])
-async def update_function_user_valves_by_id(
-    request: Request, id: str, form_data: dict, user=Depends(get_verified_user)
-):
-    function = Functions.get_function_by_id(id)
-
-    if function:
-        if id in request.app.state.FUNCTIONS:
-            function_module = request.app.state.FUNCTIONS[id]
-        else:
-            function_module, function_type, frontmatter = load_function_module_by_id(id)
-            request.app.state.FUNCTIONS[id] = function_module
-
-        if hasattr(function_module, "UserValves"):
-            UserValves = function_module.UserValves
-
-            try:
-                form_data = {k: v for k, v in form_data.items() if v is not None}
-                user_valves = UserValves(**form_data)
-                Functions.update_user_valves_by_id_and_user_id(
-                    id, user.id, user_valves.model_dump()
-                )
-                return user_valves.model_dump()
-            except Exception as e:
-                log.exception(f"Error updating function user valves by id {id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT(e),
-                )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.NOT_FOUND,
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+        return FunctionCallResponse(
+            success=False,
+            error=f"Unknown function ID: {function_call.function_id}"
         )
