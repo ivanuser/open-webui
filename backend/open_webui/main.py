@@ -1,3 +1,7 @@
+"""
+Main module for Open WebUI.
+"""
+
 import os
 import logging
 import importlib.metadata
@@ -52,6 +56,9 @@ tags_metadata = [
     {"name": "evaluations", "description": "Evaluations operations"},
     {"name": "functions", "description": "Functions operations"},
     {"name": "mcp", "description": "Model Context Protocol operations"},
+    {"name": "mcp-servers", "description": "MCP server operations"},
+    {"name": "mcp-tools", "description": "MCP tool operations"},
+    {"name": "mcp-config", "description": "MCP configuration operations"},
 ]
 
 settings = get_settings()
