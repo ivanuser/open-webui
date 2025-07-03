@@ -34,6 +34,36 @@ html {
 	word-break: break-word;
 }
 
+body {
+	color: var(--main-font-color, #ECECEC); /* Default to light gray if variable not set */
+	/* Ensure other body styles like background are handled by existing theme logic or tailwind */
+}
+
+/* Example usage of primary color - adjust selectors as needed */
+.button-primary {
+	background-color: var(--main-primary-color, #007bff); /* Default blue */
+	color: white; /* Assuming white text on primary color */
+	padding: 0.5rem 1rem;
+	border-radius: 0.25rem;
+	border: none;
+	cursor: pointer;
+}
+
+/* Example class for a custom logo. This might be applied to an img tag or a div. */
+/* For an <img> tag, its 'src' attribute should be dynamically bound in the Svelte component. */
+/* For a <div> or other element used as a logo container, you could use: */
+/* background-image: var(--main-logo-url, url('/static/logo.png')); */
+/* Ensure to set appropriate width, height, and background-size/position for the container. */
+.custom-logo-container-example {
+	width: 100px; /* Example */
+	height: 50px; /* Example */
+	background-image: var(--main-logo-url, url('/static/logo.png'));
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+
 code {
 	/* white-space-collapse: preserve !important; */
 	overflow-x: auto;

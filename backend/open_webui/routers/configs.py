@@ -320,3 +320,49 @@ async def get_banners(
     user=Depends(get_verified_user),
 ):
     return request.app.state.config.BANNERS
+
+
+############################
+# UI Theme Settings
+############################
+
+
+class UIThemeSettingsForm(BaseModel):
+    font_color: Optional[str] = None
+    primary_color: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
+@router.get("/ui/theme", response_model=UIThemeSettingsForm)
+async def get_ui_theme_settings(request: Request, user=Depends(get_admin_user)):
+    config = request.app.state.config
+    return UIThemeSettingsForm(
+        font_color=config.DEFAULT_FONT_COLOR,
+        primary_color=config.DEFAULT_PRIMARY_COLOR,
+        logo_url=config.DEFAULT_LOGO_URL,
+    )
+
+
+@router.post("/ui/theme", response_model=UIThemeSettingsForm)
+async def set_ui_theme_settings(
+    request: Request,
+    form_data: UIThemeSettingsForm,
+    user=Depends(get_admin_user),
+):
+    app_config = request.app.state.config
+
+    # AppConfig.__setattr__ handles updating PersistentConfig.value and calling .save()
+    # which in turn updates the global CONFIG_DATA and calls save_to_db.
+    if form_data.font_color is not None:
+        app_config.DEFAULT_FONT_COLOR = form_data.font_color
+    if form_data.primary_color is not None:
+        app_config.DEFAULT_PRIMARY_COLOR = form_data.primary_color
+    if form_data.logo_url is not None:
+        app_config.DEFAULT_LOGO_URL = form_data.logo_url
+
+    # The response should reflect the newly set values from the AppConfig instance
+    return UIThemeSettingsForm(
+        font_color=app_config.DEFAULT_FONT_COLOR,
+        primary_color=app_config.DEFAULT_PRIMARY_COLOR,
+        logo_url=app_config.DEFAULT_LOGO_URL,
+    )
