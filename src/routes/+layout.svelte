@@ -47,11 +47,6 @@
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
-feature/ui-customization-admin
-	// onDestroy is already imported from 'svelte' in line 8, aliasing it again is redundant.
-
-	import { onDestroy as svelteOnDestroy } from 'svelte';
-main
 
 	import { beforeNavigate } from '$app/navigation';
 	import { updated } from '$app/state';
@@ -671,24 +666,14 @@ main
 			window.removeEventListener('resize', onResize);
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			if (tokenTimer) clearInterval(tokenTimer);
-feature/ui-customization-admin
-			// unsubscribeConfig is handled by the top-level onDestroy
-
-			unsubscribeConfig && unsubscribeConfig();
-main
 		};
 	});
 
 	// Reactive statement to update CSS variables when theme settings change in the config store
-feature/ui-customization-admin
 	let unsubscribeConfig;
 
 	onMount(() => {
 		unsubscribeConfig = config.subscribe((newConfig) => {
-
-	onMount(() => {
-		const unsubscribeConfig = config.subscribe((newConfig) => {
- main
 			if (newConfig?.ui?.theme) {
 				const themeSettings = newConfig.ui.theme;
 				// console.log('Config store updated, applying theme settings:', themeSettings);
@@ -711,13 +696,9 @@ feature/ui-customization-admin
 				}
 			}
 		});
-	}
+	});
 
- feature/ui-customization-admin
 	onDestroy(() => {
-
-	svelteOnDestroy(() => {
- main
 		unsubscribeConfig && unsubscribeConfig();
 	});
 </script>
