@@ -349,47 +349,20 @@ async def set_ui_theme_settings(
     form_data: UIThemeSettingsForm,
     user=Depends(get_admin_user),
 ):
-    config = request.app.state.config
+    app_config = request.app.state.config
 
+    # AppConfig.__setattr__ handles updating PersistentConfig.value and calling .save()
+    # which in turn updates the global CONFIG_DATA and calls save_to_db.
     if form_data.font_color is not None:
-        config.DEFAULT_FONT_COLOR = form_data.font_color
+        app_config.DEFAULT_FONT_COLOR = form_data.font_color
     if form_data.primary_color is not None:
-        config.DEFAULT_PRIMARY_COLOR = form_data.primary_color
+        app_config.DEFAULT_PRIMARY_COLOR = form_data.primary_color
     if form_data.logo_url is not None:
-        config.DEFAULT_LOGO_URL = form_data.logo_url
+        app_config.DEFAULT_LOGO_URL = form_data.logo_url
 
-    # Note: The AppConfig class in config.py is responsible for calling save_to_db
-    # when its attributes are set. We are directly modifying the PersistentConfig instances here.
-    # We need to ensure these changes are persisted.
-    # A more robust way would be to update the global CONFIG_DATA and call save_config.
-
-    current_config_data = get_config()
-    if "ui" not in current_config_data:
-        current_config_data["ui"] = {}
-    if "theme" not in current_config_data["ui"]:
-        current_config_data["ui"]["theme"] = {}
-
-    if form_data.font_color is not None:
-        current_config_data["ui"]["theme"]["font_color"] = form_data.font_color
-    if form_data.primary_color is not None:
-        current_config_data["ui"]["theme"]["primary_color"] = form_data.primary_color
-    if form_data.logo_url is not None:
-        current_config_data["ui"]["theme"]["logo_url"] = form_data.logo_url
-
-    save_config(current_config_data)
-
-    # Update the in-memory PersistentConfig instances as well, so they reflect the change immediately
-    # without needing a restart or relying on potential Redis propagation delays.
-    if form_data.font_color is not None:
-        request.app.state.config.DEFAULT_FONT_COLOR.value = form_data.font_color
-    if form_data.primary_color is not None:
-        request.app.state.config.DEFAULT_PRIMARY_COLOR.value = form_data.primary_color
-    if form_data.logo_url is not None:
-        request.app.state.config.DEFAULT_LOGO_URL.value = form_data.logo_url
-
-
+    # The response should reflect the newly set values from the AppConfig instance
     return UIThemeSettingsForm(
-        font_color=request.app.state.config.DEFAULT_FONT_COLOR,
-        primary_color=request.app.state.config.DEFAULT_PRIMARY_COLOR,
-        logo_url=request.app.state.config.DEFAULT_LOGO_URL,
+        font_color=app_config.DEFAULT_FONT_COLOR,
+        primary_color=app_config.DEFAULT_PRIMARY_COLOR,
+        logo_url=app_config.DEFAULT_LOGO_URL,
     )
