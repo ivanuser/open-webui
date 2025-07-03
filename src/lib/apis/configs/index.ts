@@ -21,7 +21,11 @@ export const importConfig = async (token: string, config) => {
 		return await response.json();
 	} catch (err) {
 		console.error(err);
+feature/ui-customization-admin
 		const detail = err.detail || 'Failed to import config';
+
+		const detail = err?.detail || 'Failed to import config';
+main
 		throw detail;
 	}
 };
