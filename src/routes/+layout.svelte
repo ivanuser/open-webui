@@ -31,8 +31,9 @@
 	import { page } from '$app/stores';
 	import { Toaster, toast } from 'svelte-sonner';
 
-	import { executeToolServer, getBackendConfig } from '$lib/apis';
+	import { executeToolServer, getBackendConfig, getUIThemeSettings } from '$lib/apis';
 	import { getSessionUser, userSignOut } from '$lib/apis/auths';
+	import { browser } from '$app/environment';
 
 	import '../tailwind.css';
 	import '../app.css';
@@ -46,6 +47,7 @@
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
+	import { onDestroy as svelteOnDestroy } from 'svelte';
 
 	import { beforeNavigate } from '$app/navigation';
 	import { updated } from '$app/state';
@@ -568,6 +570,30 @@
 			await config.set(backendConfig);
 			await WEBUI_NAME.set(backendConfig.name);
 
+			// Apply UI Theme Settings after config is loaded
+			if (browser && $config?.ui?.theme) {
+				const themeSettings = $config.ui.theme;
+				if (themeSettings.font_color) {
+					document.documentElement.style.setProperty(
+						'--main-font-color',
+						themeSettings.font_color
+					);
+				}
+				if (themeSettings.primary_color) {
+					document.documentElement.style.setProperty(
+						'--main-primary-color',
+						themeSettings.primary_color
+					);
+				}
+				if (themeSettings.logo_url && themeSettings.logo_url !== '') {
+					document.documentElement.style.setProperty('--main-logo-url', `url('${themeSettings.logo_url}')`);
+				} else {
+					// Fallback to default logo if URL is empty or not set
+					document.documentElement.style.setProperty('--main-logo-url', `url('/static/logo.png')`);
+				}
+			}
+
+
 			if ($config) {
 				await setupSocket($config.features?.enable_websocket ?? true);
 
@@ -639,7 +665,42 @@
 
 		return () => {
 			window.removeEventListener('resize', onResize);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			if (tokenTimer) clearInterval(tokenTimer);
+			unsubscribeConfig && unsubscribeConfig();
 		};
+	});
+
+	// Reactive statement to update CSS variables when theme settings change in the config store
+	let unsubscribeConfig;
+	if (browser) {
+		unsubscribeConfig = config.subscribe((newConfig) => {
+			if (newConfig?.ui?.theme) {
+				const themeSettings = newConfig.ui.theme;
+				// console.log('Config store updated, applying theme settings:', themeSettings);
+				if (themeSettings.font_color) {
+					document.documentElement.style.setProperty(
+						'--main-font-color',
+						themeSettings.font_color
+					);
+				}
+				if (themeSettings.primary_color) {
+					document.documentElement.style.setProperty(
+						'--main-primary-color',
+						themeSettings.primary_color
+					);
+				}
+				if (themeSettings.logo_url && themeSettings.logo_url !== '') {
+					document.documentElement.style.setProperty('--main-logo-url', `url('${themeSettings.logo_url}')`);
+				} else {
+					document.documentElement.style.setProperty('--main-logo-url', `url('/static/logo.png')`);
+				}
+			}
+		});
+	}
+
+	svelteOnDestroy(() => {
+		unsubscribeConfig && unsubscribeConfig();
 	});
 </script>
 

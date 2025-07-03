@@ -105,6 +105,13 @@
 		<title>Open WebUI</title>
 
 		%sveltekit.head%
+		<style id="custom-theme-vars">
+			:root {
+				--main-font-color: #ECECEC; /* Default fallback font color (light gray for dark themes) */
+				--main-primary-color: #007bff; /* Default fallback primary color */
+				--main-logo-url: url('/static/logo.png'); /* Default fallback logo */
+			}
+		</style>
 	</head>
 
 	<body data-sveltekit-preload-data="hover">
