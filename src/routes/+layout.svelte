@@ -682,7 +682,8 @@ main
 	// Reactive statement to update CSS variables when theme settings change in the config store
 feature/ui-customization-admin
 	let unsubscribeConfig;
-	if (browser) {
+
+	onMount(() => {
 		unsubscribeConfig = config.subscribe((newConfig) => {
 
 	onMount(() => {
