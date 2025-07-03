@@ -50,6 +50,7 @@ body {
 }
 
 /* Example class for a custom logo. This might be applied to an img tag or a div. */
+feature/ui-customization-admin
 /* For an <img> tag, its 'src' attribute should be dynamically bound in the Svelte component. */
 /* For a <div> or other element used as a logo container, you could use: */
 /* background-image: var(--main-logo-url, url('/static/logo.png')); */
@@ -61,6 +62,17 @@ body {
 	background-size: contain;
 	background-repeat: no-repeat;
 	background-position: center;
+
+/* For an img tag, you might change its src dynamically. */
+/* For a div, you might use it as a background. */
+.custom-logo-container {
+	background-image: var(--main-logo-url, url('/static/logo.png')); /* Default Open WebUI logo */
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+	width: 100px; /* Adjust width as needed */
+	height: 100px; /* Adjust height as needed */
+ main
 }
 
 
