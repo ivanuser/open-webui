@@ -13,15 +13,14 @@
 		getUIThemeSettings,
 		setUIThemeSettings
 	} from '$lib/apis';
-	import { setDefaultPromptSuggestions } from '$lib/apis/configs';
+	import { setDefaultPromptSuggestions, getBanners, setBanners } from '$lib/apis/configs';
 	import { config, settings, user } from '$lib/stores';
-	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
+	import { createEventDispatcher, onMount, getContext } from 'svelte';
 
 	import { banners as _banners } from '$lib/stores';
 	import type { Banner } from '$lib/types';
 
 	import { getBaseModels } from '$lib/apis/models';
-	import { getBanners, setBanners } from '$lib/apis/configs';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
@@ -29,9 +28,8 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Banners from './Interface/Banners.svelte';
 
-	const dispatch = createEventDispatcher();
-
 	const i18n = getContext('i18n');
+	const dispatch = createEventDispatcher();
 
 	let taskConfig = {
 		TASK_MODEL: '',
