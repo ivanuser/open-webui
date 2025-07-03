@@ -713,11 +713,7 @@ feature/ui-customization-admin
 		});
 	}
 
- feature/ui-customization-admin
-	onDestroy(() => {
-
 	svelteOnDestroy(() => {
- main
 		unsubscribeConfig && unsubscribeConfig();
 	});
 </script>
