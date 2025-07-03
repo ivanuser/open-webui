@@ -5,10 +5,17 @@
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
 
-	import { getBackendConfig, getModels, getTaskConfig, updateTaskConfig } from '$lib/apis';
+	import {
+		getBackendConfig,
+		getModels,
+		getTaskConfig,
+		updateTaskConfig,
+		getUIThemeSettings,
+		setUIThemeSettings
+	} from '$lib/apis';
 	import { setDefaultPromptSuggestions } from '$lib/apis/configs';
 	import { config, settings, user } from '$lib/stores';
-	import { createEventDispatcher, onMount, getContext } from 'svelte';
+	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
 
 	import { banners as _banners } from '$lib/stores';
 	import type { Banner } from '$lib/types';
@@ -47,22 +54,56 @@
 	let promptSuggestions = [];
 	let banners: Banner[] = [];
 
+	let uiThemeSettings = {
+		font_color: '#FFFFFF',
+		primary_color: '#007bff',
+		logo_url: ''
+	};
+
 	const updateInterfaceHandler = async () => {
+		// Save task configurations
 		taskConfig = await updateTaskConfig(localStorage.token, taskConfig);
 
+		// Save prompt suggestions
 		promptSuggestions = promptSuggestions.filter((p) => p.content !== '');
 		promptSuggestions = await setDefaultPromptSuggestions(localStorage.token, promptSuggestions);
+
+		// Save banners
 		await updateBanners();
 
-		await config.set(await getBackendConfig());
+		// Save UI Theme Settings
+		await setUIThemeSettings(localStorage.token, uiThemeSettings);
+
+		// Update global config store
+		const updatedConfig = await getBackendConfig();
+		await config.set(updatedConfig);
+
+		// Optionally, dispatch an event or use a store to notify other parts of the app about theme changes
+		// This will be handled more directly in the global layout for applying styles.
+		dispatch('themeUpdated', uiThemeSettings);
 	};
 
 	onMount(async () => {
-		await init();
+		await init(); // Initializes models for task config dropdown
+
+		// Fetch Task Config
 		taskConfig = await getTaskConfig(localStorage.token);
 
-		promptSuggestions = $config?.default_prompt_suggestions ?? [];
+		// Set Prompt Suggestions from global config store or defaults
+		promptSuggestions = $config?.ui?.prompt_suggestions ?? $config?.default_prompt_suggestions ?? [];
+
+		// Fetch Banners
 		banners = await getBanners(localStorage.token);
+
+		// Fetch UI Theme Settings
+		const fetchedThemeSettings = await getUIThemeSettings(localStorage.token);
+		if (fetchedThemeSettings) {
+			uiThemeSettings = {
+				font_color: fetchedThemeSettings.font_color ?? uiThemeSettings.font_color,
+				primary_color: fetchedThemeSettings.primary_color ?? uiThemeSettings.primary_color,
+				logo_url: fetchedThemeSettings.logo_url ?? uiThemeSettings.logo_url
+			};
+		}
 	});
 
 	const updateBanners = async () => {
@@ -387,6 +428,79 @@
 				<div class=" mb-2.5 text-base font-medium">{$i18n.t('UI')}</div>
 
 				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+
+				<!-- Appearance Settings -->
+				<div class="mb-3.5">
+					<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Appearance')}</div>
+
+					<div class="p-2.5 space-y-2.5 bg-gray-50 dark:bg-gray-850 rounded-lg">
+						<!-- Font Color Setting -->
+						<div class="flex items-center">
+							<label for="fontColorPicker" class="text-xs w-1/3">{$i18n.t('Font Color')}</label>
+							<div
+								class="w-2/3 p-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center"
+							>
+								<input
+									type="color"
+									id="fontColorPicker"
+									class="w-8 h-8 p-0 border-none cursor-pointer"
+									bind:value={uiThemeSettings.font_color}
+								/>
+								<input
+									type="text"
+									class="ml-2 flex-1 px-2 py-1 text-xs bg-transparent outline-none"
+									bind:value={uiThemeSettings.font_color}
+									placeholder={$i18n.t('e.g. #RRGGBB')}
+								/>
+							</div>
+						</div>
+
+						<!-- Primary Color Setting -->
+						<div class="flex items-center">
+							<label for="primaryColorPicker" class="text-xs w-1/3"
+								>{$i18n.t('Primary Color')}</label
+							>
+							<div
+								class="w-2/3 p-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center"
+							>
+								<input
+									type="color"
+									id="primaryColorPicker"
+									class="w-8 h-8 p-0 border-none cursor-pointer"
+									bind:value={uiThemeSettings.primary_color}
+								/>
+								<input
+									type="text"
+									class="ml-2 flex-1 px-2 py-1 text-xs bg-transparent outline-none"
+									bind:value={uiThemeSettings.primary_color}
+									placeholder={$i18n.t('e.g. #RRGGBB')}
+								/>
+							</div>
+						</div>
+
+						<!-- Logo URL Setting -->
+						<div class="flex items-center">
+							<label for="logoUrlInput" class="text-xs w-1/3">{$i18n.t('Logo URL')}</label>
+							<div
+								class="w-2/3 p-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center"
+							>
+								<input
+									type="text"
+									id="logoUrlInput"
+									class="flex-1 px-2 py-1 text-xs bg-transparent outline-none"
+									bind:value={uiThemeSettings.logo_url}
+									placeholder={$i18n.t('Enter URL for your logo')}
+								/>
+							</div>
+						</div>
+						<div class="text-xs text-gray-500 dark:text-gray-400 pl-1/3 w-2/3 ml-auto">
+							{$i18n.t('Leave empty to use the default Open WebUI logo. For local files, place them in `backend/open_webui/static/assets/` and use the path like `/static/assets/custom_logo.png`')}
+						</div>
+
+					</div>
+				</div>
+				<!-- End of Appearance Settings -->
+
 
 				<div class="mb-2.5">
 					<div class="flex w-full justify-between">
