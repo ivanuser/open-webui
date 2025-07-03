@@ -672,9 +672,8 @@
 	});
 
 	// Reactive statement to update CSS variables when theme settings change in the config store
-	let unsubscribeConfig;
-	if (browser) {
-		unsubscribeConfig = config.subscribe((newConfig) => {
+	onMount(() => {
+		const unsubscribeConfig = config.subscribe((newConfig) => {
 			if (newConfig?.ui?.theme) {
 				const themeSettings = newConfig.ui.theme;
 				// console.log('Config store updated, applying theme settings:', themeSettings);
