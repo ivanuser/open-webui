@@ -945,6 +945,25 @@ DEFAULT_LOCALE = PersistentConfig(
     os.environ.get("DEFAULT_LOCALE", ""),
 )
 
+DEFAULT_FONT_COLOR = PersistentConfig(
+    "DEFAULT_FONT_COLOR",
+    "ui.theme.font_color",
+    os.environ.get("DEFAULT_FONT_COLOR", "#FFFFFF"),  # Default to white
+)
+
+DEFAULT_PRIMARY_COLOR = PersistentConfig(
+    "DEFAULT_PRIMARY_COLOR",
+    "ui.theme.primary_color",
+    os.environ.get("DEFAULT_PRIMARY_COLOR", "#007bff"),  # Default to a standard blue
+)
+
+DEFAULT_LOGO_URL = PersistentConfig(
+    "DEFAULT_LOGO_URL",
+    "ui.theme.logo_url",
+    os.environ.get("DEFAULT_LOGO_URL", ""), # Default to empty string
+)
+
+
 DEFAULT_MODELS = PersistentConfig(
     "DEFAULT_MODELS", "ui.default_models", os.environ.get("DEFAULT_MODELS", None)
 )
