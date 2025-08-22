@@ -16,6 +16,52 @@ export default defineConfig({
 			]
 		})
 	],
+	server: {
+		host: true, // Listen on all network interfaces
+		allowedHosts: [
+			'localhost',
+			'127.0.0.1',
+			'openweb.honercloud.com',
+			'.honercloud.com' // This allows any subdomain of honercloud.com
+		],
+		proxy: {
+			'/api': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/ollama': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/openai': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/rag': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/images': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/audio': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			},
+			'/utils': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				secure: false
+			}
+		}
+	},
 	define: {
 		APP_VERSION: JSON.stringify(process.env.npm_package_version),
 		APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
