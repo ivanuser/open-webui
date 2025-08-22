@@ -256,7 +256,31 @@ async def generate_chat_completion(
             return await generate_function_chat_completion(
                 request, form_data, user=user, models=models
             )
-        if model.get("owned_by") == "ollama":
+        if model.get("owned_by") == "claude-code-cli":
+            # Route to Claude Code CLI handler
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                url = f"{request.base_url}api/v1/claude-code/chat/completions"
+                headers = {"Authorization": request.headers.get("authorization", "")}
+                
+                async with session.post(url, json=form_data, headers=headers) as response:
+                    if form_data.get("stream"):
+                        async def stream_response():
+                            async for chunk in response.content:
+                                yield chunk
+                        
+                        return StreamingResponse(
+                            stream_response(),
+                            media_type="text/event-stream",
+                            headers={
+                                "Cache-Control": "no-cache",
+                                "Connection": "keep-alive",
+                                "X-Accel-Buffering": "no"
+                            }
+                        )
+                    else:
+                        return await response.json()
+        elif model.get("owned_by") == "ollama":
             # Using /ollama/api/chat endpoint
             form_data = convert_payload_openai_to_ollama(form_data)
             response = await generate_ollama_chat_completion(

@@ -56,6 +56,23 @@ async def fetch_openai_models(request: Request, user: UserModel = None):
     return openai_response["data"]
 
 
+async def fetch_claude_code_models(request: Request, user: UserModel = None):
+    """Fetch Claude Code models if enabled"""
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{request.base_url}api/v1/claude-code/models",
+                headers={"Authorization": f"Bearer {user.api_key if hasattr(user, 'api_key') else ''}"}
+            ) as response:
+                if response.status == 200:
+                    models = await response.json()
+                    return models if isinstance(models, list) else []
+    except Exception as e:
+        log.debug(f"Failed to fetch Claude Code models: {e}")
+    return []
+
+
 async def get_all_base_models(request: Request, user: UserModel = None):
     openai_task = (
         fetch_openai_models(request, user)
@@ -68,12 +85,13 @@ async def get_all_base_models(request: Request, user: UserModel = None):
         else asyncio.sleep(0, result=[])
     )
     function_task = get_function_models(request)
+    claude_code_task = fetch_claude_code_models(request, user)
 
-    openai_models, ollama_models, function_models = await asyncio.gather(
-        openai_task, ollama_task, function_task
+    openai_models, ollama_models, function_models, claude_code_models = await asyncio.gather(
+        openai_task, ollama_task, function_task, claude_code_task
     )
 
-    return function_models + openai_models + ollama_models
+    return function_models + openai_models + ollama_models + claude_code_models
 
 
 async def get_all_models(request, refresh: bool = False, user: UserModel = None):

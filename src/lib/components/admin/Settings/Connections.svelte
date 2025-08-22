@@ -19,6 +19,7 @@
 	import OpenAIConnection from './Connections/OpenAIConnection.svelte';
 	import AddConnectionModal from '$lib/components/AddConnectionModal.svelte';
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
+	import ClaudeCodeConnection from './Connections/ClaudeCodeConnection.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -382,6 +383,12 @@
 							'Direct Connections allow users to connect to their own OpenAI compatible API endpoints.'
 						)}
 					</div>
+				</div>
+
+				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+
+				<div class="my-2">
+					<ClaudeCodeConnection {getModels} />
 				</div>
 
 				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
