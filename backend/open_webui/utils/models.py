@@ -59,15 +59,26 @@ async def fetch_openai_models(request: Request, user: UserModel = None):
 async def fetch_claude_code_models(request: Request, user: UserModel = None):
     """Fetch Claude Code models if enabled"""
     try:
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{request.base_url}api/v1/claude-code/models",
-                headers={"Authorization": f"Bearer {user.api_key if hasattr(user, 'api_key') else ''}"}
-            ) as response:
-                if response.status == 200:
-                    models = await response.json()
-                    return models if isinstance(models, list) else []
+        # Check if Claude Code is enabled directly
+        from open_webui.routers.claude_code import claude_code_config
+        
+        if not claude_code_config.enabled:
+            return []
+        
+        # Return the Claude Code model directly without API call
+        return [{
+            "id": "claude-code",
+            "name": "Claude Code",
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": "claude-code-cli",
+            "info": {
+                "description": "Claude with code execution capabilities via CLI",
+                "context_length": 200000,
+                "vision": True,
+                "tools": True
+            }
+        }]
     except Exception as e:
         log.debug(f"Failed to fetch Claude Code models: {e}")
     return []
