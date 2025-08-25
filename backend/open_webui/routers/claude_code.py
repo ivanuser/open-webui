@@ -86,7 +86,10 @@ async def chat_completions(
     """
     OpenAI-compatible chat completions endpoint for Claude Code CLI
     """
+    log.info(f"Claude Code chat_completions called with body keys: {body.keys()}")
+    
     if not claude_code_config.enabled:
+        log.warning("Claude Code is not enabled")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Claude Code is not enabled. Please enable it in settings."
@@ -96,6 +99,8 @@ async def chat_completions(
     messages = body.get("messages", [])
     stream = body.get("stream", False)
     model = body.get("model", "claude-code")
+    
+    log.info(f"Claude Code processing: model={model}, stream={stream}, messages count={len(messages)}")
     
     # Check if the model requested is claude-code
     if model != "claude-code":
@@ -157,19 +162,18 @@ async def chat_completions(
             # Create a temporary directory for Claude Code to work in
             with tempfile.TemporaryDirectory() as temp_dir:
                 working_dir = claude_code_config.working_directory or temp_dir
+                log.info(f"Using working directory: {working_dir}")
                 
-                # Build the command
-                # Note: Adjust these parameters based on Claude Code CLI's actual interface
+                # Build the command with proper Claude CLI arguments
                 cmd = [
                     claude_code_config.command_path,
-                    user_message
+                    '--print',
+                    user_message,
+                    '--output-format', 'stream-json',
+                    '--verbose'
                 ]
                 
-                # Add context if there's conversation history
-                if len(conversation_parts) > 1:
-                    # You might need to adjust this based on how Claude Code handles context
-                    # For now, we'll just pass the last user message
-                    pass
+                log.info(f"Executing Claude Code command: {' '.join(cmd[:2])}... (with message)")
                 
                 # Start the subprocess
                 process = await asyncio.create_subprocess_exec(
@@ -180,40 +184,83 @@ async def chat_completions(
                     stdin=asyncio.subprocess.PIPE
                 )
                 
+                log.info(f"Claude Code process started with PID: {process.pid}")
+                
                 # Send any context through stdin if needed
                 # process.stdin.write(("\n".join(conversation_parts)).encode())
                 # await process.stdin.drain()
                 # process.stdin.close()
                 
-                # Stream the output
+                # Stream the output - Claude CLI returns JSON lines
                 buffer = ""
+                full_response = ""
                 while True:
                     try:
                         line = await asyncio.wait_for(
                             process.stdout.readline(),
-                            timeout=1.0
+                            timeout=5.0
                         )
                         
                         if not line:
                             break
                         
-                        text = line.decode('utf-8')
-                        buffer += text
+                        text = line.decode('utf-8').strip()
+                        if not text:
+                            continue
                         
-                        # Format as OpenAI SSE for streaming
-                        if stream:
-                            chunk = {
-                                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
-                                "object": "chat.completion.chunk",
-                                "created": int(time.time()),
-                                "model": model,
-                                "choices": [{
-                                    "index": 0,
-                                    "delta": {"content": text},
-                                    "finish_reason": None
-                                }]
-                            }
-                            yield f"data: {json.dumps(chunk)}\n\n"
+                        log.info(f"Claude CLI output: {text[:100]}...")
+                        
+                        # Try to parse as JSON (Claude CLI format)
+                        try:
+                            response_data = json.loads(text)
+                            
+                            # Extract content from Claude CLI response
+                            content = ""
+                            if isinstance(response_data, dict):
+                                if 'content' in response_data:
+                                    content = response_data['content']
+                                elif 'text' in response_data:
+                                    content = response_data['text']
+                                elif 'message' in response_data:
+                                    content = response_data['message']
+                            
+                            if content:
+                                full_response += content
+                                buffer += content
+                                
+                                # Format as OpenAI SSE for streaming
+                                if stream:
+                                    chunk = {
+                                        "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                                        "object": "chat.completion.chunk",
+                                        "created": int(time.time()),
+                                        "model": model,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": {"content": content},
+                                            "finish_reason": None
+                                        }]
+                                    }
+                                    yield f"data: {json.dumps(chunk)}\n\n"
+                        
+                        except json.JSONDecodeError:
+                            # Not JSON, treat as raw text
+                            full_response += text + "\n"
+                            buffer += text + "\n"
+                            
+                            if stream:
+                                chunk = {
+                                    "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                                    "object": "chat.completion.chunk",
+                                    "created": int(time.time()),
+                                    "model": model,
+                                    "choices": [{
+                                        "index": 0,
+                                        "delta": {"content": text + "\n"},
+                                        "finish_reason": None
+                                    }]
+                                }
+                                yield f"data: {json.dumps(chunk)}\n\n"
                     
                     except asyncio.TimeoutError:
                         # Check if process is still running
@@ -222,23 +269,30 @@ async def chat_completions(
                         continue
                 
                 # Wait for process to complete
-                await process.wait()
+                return_code = await process.wait()
+                log.info(f"Claude Code process completed with return code: {return_code}")
+                
+                # Read any remaining stderr
+                stderr = await process.stderr.read()
+                if stderr:
+                    error_msg = stderr.decode('utf-8')
+                    log.warning(f"Claude Code stderr: {error_msg}")
                 
                 # Handle any errors
-                if process.returncode != 0:
-                    stderr = await process.stderr.read()
-                    error_msg = stderr.decode('utf-8')
-                    log.error(f"Claude Code error: {error_msg}")
+                if return_code != 0:
+                    log.error(f"Claude Code failed with return code {return_code}: {error_msg if stderr else 'No error message'}")
                     
                     if stream:
                         error_chunk = {
                             "error": {
-                                "message": f"Claude Code error: {error_msg}",
+                                "message": f"Claude Code error (code {return_code}): {error_msg if stderr else 'No error message'}",
                                 "type": "claude_code_error",
                                 "code": "claude_code_error"
                             }
                         }
                         yield f"data: {json.dumps(error_chunk)}\n\n"
+                else:
+                    log.info(f"Claude Code completed successfully. Buffer length: {len(buffer)}")
                 
                 # Send final message
                 if stream:
@@ -280,11 +334,11 @@ async def chat_completions(
                     yield json.dumps(response)
         
         except Exception as e:
-            log.exception(f"Error in Claude Code chat: {e}")
+            log.exception(f"Exception in Claude Code chat: {e}")
             error_response = {
                 "error": {
                     "message": str(e),
-                    "type": "internal_error",
+                    "type": "internal_error", 
                     "code": "internal_error"
                 }
             }
@@ -305,11 +359,20 @@ async def chat_completions(
         )
     else:
         # For non-streaming, collect all output and return as JSON
+        log.info("Processing non-streaming Claude Code response")
         response_gen = generate_response()
         response = ""
         async for chunk in response_gen:
             response = chunk  # Last chunk will be the complete response
-        return JSONResponse(content=json.loads(response))
+        
+        log.info(f"Final response length: {len(response)}")
+        try:
+            parsed_response = json.loads(response) if response else {}
+            log.info(f"Returning parsed response: {list(parsed_response.keys()) if isinstance(parsed_response, dict) else 'not a dict'}")
+            return JSONResponse(content=parsed_response)
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse Claude Code response as JSON: {e}. Raw response: {response[:200]}")
+            return JSONResponse(content={"error": {"message": "Invalid response from Claude Code", "raw": response[:500]}})
 
 
 @router.get("/models")

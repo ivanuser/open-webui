@@ -190,6 +190,8 @@ async def generate_chat_completion(
         raise Exception("Model not found")
 
     model = models[model_id]
+    
+    log.error(f"CHAT PROCESSING: model_id={model_id}, owned_by={model.get('owned_by')}")
 
     if getattr(request.state, "direct", False):
         return await generate_direct_chat_completion(
@@ -258,7 +260,7 @@ async def generate_chat_completion(
             )
         if model.get("owned_by") == "claude-code-cli":
             # Route directly to Claude Code CLI handler
-            log.info("Routing to Claude Code CLI handler")
+            log.error(f"CLAUDE CODE ROUTING TRIGGERED! Model: {model}")
             from open_webui.routers.claude_code import chat_completions as claude_chat
             return await claude_chat(request, form_data, user=user)
         elif model.get("owned_by") == "ollama":

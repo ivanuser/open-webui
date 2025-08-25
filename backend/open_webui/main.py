@@ -1406,6 +1406,9 @@ async def chat_completion(
     model_id = form_data.get("model", None)
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
+    
+    # DEBUG: Log all requests to see what model is being used
+    log.error(f"MAIN CHAT COMPLETION: model_id={model_id}, available_models={list(request.app.state.MODELS.keys())}")
 
     metadata = {}
     try:
