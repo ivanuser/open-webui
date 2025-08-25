@@ -156,6 +156,10 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
 
+# copy dependency install script
+COPY --chown=$UID:$GID ./install_missing_dep.sh /app/install_missing_dep.sh
+RUN chmod +x /app/install_missing_dep.sh
+
 EXPOSE 8080
 
 HEALTHCHECK CMD curl --silent --fail http://localhost:${PORT:-8080}/health | jq -ne 'input.status == true' || exit 1
