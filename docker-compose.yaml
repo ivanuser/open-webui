@@ -12,6 +12,7 @@ services:
       - ${OPEN_WEBUI_PORT-3000}:8080
     environment:
       - 'WEBUI_SECRET_KEY='
+      - 'CLAUDE_CODE_OAUTH_TOKEN=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'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
