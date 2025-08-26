@@ -87,7 +87,7 @@ from open_webui.routers import (
     users,
     utils,
     scim,
-    claude_code,
+    claude_code_simple as claude_code,
 )
 
 from open_webui.routers.retrieval import (

@@ -60,7 +60,7 @@ async def fetch_claude_code_models(request: Request, user: UserModel = None):
     """Fetch Claude Code models if enabled"""
     try:
         # Check if Claude Code is enabled directly
-        from open_webui.routers.claude_code import claude_code_config
+        from open_webui.routers.claude_code_simple import claude_code_config
         
         if not claude_code_config.enabled:
             return []
