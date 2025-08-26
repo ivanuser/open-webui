@@ -7,6 +7,7 @@ services:
     container_name: open-webui
     volumes:
       - open-webui:/app/backend/data
+      - /home/ihoner/.nvm/versions/node/v22.17.1:/opt/node:ro
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
     environment:
@@ -14,6 +15,11 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
+    command: >
+      bash -c "ln -sf /opt/node/bin/node /usr/local/bin/node 2>/dev/null || true &&
+               ln -sf /opt/node/bin/claude /usr/local/bin/claude 2>/dev/null || true &&
+               which claude && claude --version &&
+               cd /app/backend && exec bash start.sh"
 
 volumes:
   open-webui: {}
