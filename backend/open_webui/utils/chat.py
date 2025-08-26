@@ -260,8 +260,8 @@ async def generate_chat_completion(
             )
         if model.get("owned_by") == "claude-code-cli":
             # Route directly to Claude Code CLI handler
-            log.error(f"CLAUDE CODE ROUTING TRIGGERED! Model: {model}")
-            from open_webui.routers.claude_code_simple import chat_completions as claude_chat
+            log.info(f"Routing to Claude Code integration for model: {model.get('id')}")
+            from open_webui.routers.claude_code_integrated import chat_completions as claude_chat
             return await claude_chat(request, form_data, user=user)
         elif model.get("owned_by") == "ollama":
             # Using /ollama/api/chat endpoint
