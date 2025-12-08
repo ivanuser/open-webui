@@ -1,0 +1,42 @@
+[
+  {
+    "command": "rmf",
+    "title": "RMF Quick Assistant",
+    "content": "You are an RMF (Risk Management Framework) expert. Help me with the following RMF-related question:\n\n{{question}}\n\nProvide a clear, actionable response with references to relevant NIST publications (SP 800-37, 800-53, 800-60, FIPS 199/200) where applicable."
+  },
+  {
+    "command": "categorize",
+    "title": "FIPS 199 Categorization Helper",
+    "content": "Help me perform a FIPS 199 security categorization. I will describe my system and the information it processes.\n\n**System Description:**\n{{system_description}}\n\n**Information Types Processed:**\n{{information_types}}\n\nPlease:\n1. Map the information types to NIST SP 800-60 categories\n2. Determine provisional impact levels (Low/Moderate/High) for Confidentiality, Integrity, and Availability\n3. Apply the high-water mark principle to determine the overall system categorization\n4. Provide rationale for each determination\n5. Format the result as: SC [SYSTEM NAME] = {(confidentiality, X), (integrity, Y), (availability, Z)}"
+  },
+  {
+    "command": "control",
+    "title": "800-53 Control Explainer",
+    "content": "Provide a detailed explanation of NIST 800-53 Rev. 5 control: **{{control_id}}**\n\nInclude:\n1. **Control Name & Family**\n2. **Control Statement** (the requirement)\n3. **Supplemental Guidance** (key points)\n4. **Control Enhancements** (list available enhancements)\n5. **Related Controls** (dependencies and related controls)\n6. **Implementation Guidance** (practical approaches)\n7. **Assessment Procedures** (from SP 800-53A)\n8. **Common Pitfalls** (what assessors look for)"
+  },
+  {
+    "command": "ssp-review",
+    "title": "SSP Implementation Review",
+    "content": "Review the following System Security Plan (SSP) control implementation statement for completeness and compliance:\n\n**Control ID:** {{control_id}}\n\n**Implementation Statement:**\n{{implementation_statement}}\n\nPlease analyze:\n1. Does the implementation address all parts of the control requirement?\n2. Is the language specific and measurable (not vague)?\n3. Are responsible parties and frequencies identified?\n4. Does it properly address any control enhancements?\n5. Is there proper distinction between inherited vs. system-specific implementation?\n6. What improvements would you suggest?\n\nProvide specific, actionable feedback with suggested revised language if needed."
+  },
+  {
+    "command": "poam",
+    "title": "POA&M Entry Helper",
+    "content": "Help me create a Plan of Action and Milestones (POA&M) entry for the following weakness:\n\n**Weakness/Finding:** {{weakness}}\n**Affected Control(s):** {{controls}}\n**System:** {{system_name}}\n\nGenerate a POA&M entry including:\n1. **Weakness Description** (clear, specific language)\n2. **Security Control** (affected control ID)\n3. **Risk Level** (Very Low/Low/Moderate/High/Very High) with justification\n4. **Point of Contact** (role, not name)\n5. **Recommended Corrective Action** (specific remediation steps)\n6. **Scheduled Completion Date** (realistic timeline)\n7. **Milestones** (interim checkpoints)\n8. **Resource Requirements** (what's needed)\n9. **Status** (initial status)"
+  },
+  {
+    "command": "inheritance",
+    "title": "Control Inheritance Mapper",
+    "content": "Help me determine the inheritance status for the following control in my system:\n\n**Control ID:** {{control_id}}\n**System Type:** {{system_type}}\n**Hosting Environment:** {{hosting_environment}}\n\nPlease determine:\n1. Is this control typically **Common**, **Hybrid**, or **System-Specific**?\n2. What parts might be inherited from the hosting provider?\n3. What parts are the system owner's responsibility?\n4. What documentation is needed to claim inheritance?\n5. What should be included in my SSP for this control?\n\nProvide a clear breakdown of provider vs. consumer responsibilities."
+  },
+  {
+    "command": "baseline",
+    "title": "Control Baseline Generator",
+    "content": "Generate the NIST 800-53 Rev. 5 control baseline for a **{{impact_level}}** impact system.\n\n**Focus Area (optional):** {{focus_area}}\n\nProvide:\n1. List of required controls for the {{impact_level}} baseline\n2. Highlight any controls that are particularly complex to implement\n3. Note which controls commonly have enhancements required at this impact level\n4. Identify controls where tailoring is often appropriate\n5. Suggest any additional controls beyond the baseline that should be considered"
+  },
+  {
+    "command": "assessment",
+    "title": "Control Assessment Prep",
+    "content": "Help me prepare for a security assessment of the following control:\n\n**Control ID:** {{control_id}}\n**System Name:** {{system_name}}\n\nProvide:\n1. **Assessment Objectives** (from SP 800-53A)\n2. **Assessment Methods** (Examine, Interview, Test)\n3. **Evidence to Gather** (documents, artifacts)\n4. **Interview Questions** (what assessors might ask)\n5. **Common Deficiencies** (typical findings)\n6. **Assessment Checklist** (items to verify)\n\nHelp me understand what an assessor will look for and how to be prepared."
+  }
+]
