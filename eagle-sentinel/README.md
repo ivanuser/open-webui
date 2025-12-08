@@ -6,14 +6,17 @@ Custom configurations and tools for Eagle Sentinel's RMF consulting platform bui
 
 ```
 eagle-sentinel/
-├── models/           # Custom model presets (AI assistants)
-│   └── rmf-expert.json
-├── prompts/          # Reusable prompt templates
-│   └── rmf-prompts.json
-├── functions/        # Custom Python functions (tools)
-│   └── (to be created)
-└── knowledge/        # Knowledge base configurations
-    └── (to be created)
+├── models/                           # Custom model presets (AI assistants)
+│   ├── rmf-expert.json               # RMF Expert model configuration
+│   └── rmf-expert-system-prompt.txt  # System prompt for manual setup
+├── prompts/                          # Reusable prompt templates
+│   └── rmf-prompts.json              # 8 RMF-focused prompt templates
+├── functions/                        # Custom Python tools
+│   ├── nist_800_53_lookup.py         # NIST 800-53 control lookup tool
+│   ├── fips_199_calculator.py        # FIPS 199 categorization calculator
+│   └── control_inheritance_mapper.py # Control inheritance mapping tool
+└── knowledge/                        # Knowledge base documentation
+    └── README.md                     # Guide for setting up knowledge bases
 ```
 
 ## Setup Instructions
@@ -93,9 +96,50 @@ The RMF Expert assistant specializes in:
 - **Assessment Prep**: Evidence gathering, interview preparation
 - **FedRAMP/CMMC**: Federal and DoD compliance requirements
 
-## Coming Soon
+## Installed Components
 
-- [ ] NIST 800-53 Control Lookup Function
-- [ ] FIPS 199 Calculator Function
-- [ ] Control Inheritance Mapper Tool
-- [ ] Knowledge Bases for NIST Publications
+### AI Tools (Workspace > Tools)
+
+| Tool | Description | Functions |
+|------|-------------|-----------|
+| **NIST 800-53 Control Lookup** | Query NIST 800-53 Rev. 5 security controls | `get_control`, `search_controls`, `list_control_family`, `get_baseline`, `list_families`, `get_related_controls` |
+| **FIPS 199 Calculator** | Calculate system security categorization | `calculate_categorization`, `list_information_types`, `get_information_type`, `explain_impact_levels`, `compare_baselines` |
+| **Control Inheritance Mapper** | Map control inheritance relationships | `determine_inheritance`, `map_fedramp_inheritance`, `list_common_controls`, `generate_inheritance_matrix`, `explain_inheritance_types` |
+
+### Knowledge Bases (Workspace > Knowledge)
+
+| Knowledge Base | Purpose |
+|----------------|---------|
+| **NIST RMF Core Publications** | SP 800-37, 800-53, 800-53A/B, FIPS 199/200 |
+| **NIST Supporting Guidelines** | SP 800-30, 800-60, 800-137, 800-128 |
+| **FedRAMP Documentation** | FedRAMP SAF, templates, guidance |
+| **Client Project Documents** | Client SSPs, POA&Ms, authorization packages |
+| **Eagle Sentinel Templates** | Internal templates and procedures |
+
+### User Groups (Admin > Users > Groups)
+
+| Group | Description | Permissions |
+|-------|-------------|-------------|
+| **Founders** | Founding partners | Full admin access |
+| **RMF Consultants** | Consulting team | Models, knowledge, prompts |
+| **Security Assessors** | Independent assessors | Knowledge, prompts only |
+| **Client Users** | External clients | Limited chat access |
+
+### Prompt Templates (Workspace > Prompts)
+
+- `/rmf` - Quick RMF assistance
+- `/categorize` - FIPS 199 categorization helper
+- `/control` - NIST 800-53 control explainer
+- `/ssp-review` - SSP implementation reviewer
+- `/poam` - POA&M entry generator
+- `/inheritance` - Control inheritance mapper
+- `/baseline` - Control baseline generator
+- `/assessment` - Assessment preparation helper
+
+## Next Steps
+
+1. **Upload NIST Documents** - Go to Knowledge bases and upload PDF versions of NIST publications
+2. **Add Team Members** - Create user accounts and assign to appropriate groups
+3. **Configure Base Model** - Edit RMF Expert and select your preferred LLM (GPT-4, Claude, etc.)
+4. **Enable Tools** - Edit RMF Expert model and enable all three tools
+5. **Link Knowledge Bases** - Connect NIST knowledge bases to RMF Expert model
